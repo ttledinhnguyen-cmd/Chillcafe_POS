@@ -1,0 +1,22 @@
+{
+  "name": "haki-cafe",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "init-admin": "node init-admin.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "better-sqlite3": "^11.3.0",
+    "better-sqlite3-session-store": "^0.1.0",
+    "cookie-parser": "^1.4.6",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.0",
+    "express-session": "^1.18.0",
+    "helmet": "^8.0.0",
+    "multer": "^2.1.1",
+    "sharp": "^0.34.5",
+    "uuid": "^10.0.0"
+  }
+}

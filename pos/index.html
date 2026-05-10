@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CHILL CAFE - POS</title>
+    <link rel="stylesheet" href="/pos/style.css?v=45">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" class="login-screen">
+        <div class="login-card">
+            <div class="login-logo">
+                <div class="logo-text">
+                    <span class="logo-haki">chill</span> <span class="logo-cafe">cafe</span>
+                    <span class="logo-pos">POS</span>
+                </div>
+            </div>
+            <p class="login-subtitle">Hệ thống quản lý</p>
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Tên đăng nhập</label>
+                    <input type="text" id="login-username" autocomplete="username" required>
+                </div>
+                <div class="form-group">
+                    <label>Mật khẩu</label>
+                    <div style="position:relative">
+                        <input type="password" id="login-password" autocomplete="current-password" required style="padding-right:40px">
+                        <span id="toggle-password" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:18px;color:#888;user-select:none">👁️</span>
+                    </div>
+                </div>
+                <label class="remember-me"><input type="checkbox" id="login-remember" checked> Nhớ đăng nhập</label>
+                <button type="submit" class="btn btn-primary btn-block" id="login-btn">Đăng nhập</button>
+                <div id="login-error" class="error-msg"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div id="app" class="app" style="display:none">
+        <!-- SIDEBAR -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="logo-text">
+                        <span class="logo-haki">chill</span> <span class="logo-cafe">cafe</span>
+                        <span class="logo-pos">POS</span>
+                    </div>
+                </div>
+            </div>
+            <ul class="sidebar-menu">
+                <li data-page="dashboard" class="active"><span class="icon">&#9632;</span> Tổng quan</li>
+                <li data-page="pos"><span class="icon">&#9733;</span> Bán hàng (POS)</li>
+                <li data-page="tables" data-role="admin,manager"><span class="icon">&#9635;</span> Bàn</li>
+                <li data-page="orders"><span class="icon">&#9776;</span> Đơn hàng</li>
+                <li data-page="menu" data-role="admin,manager"><span class="icon">&#9749;</span> Thực đơn</li>
+                <li data-page="shifts" data-role="admin,manager"><span class="icon">&#9200;</span> Ca làm việc</li>
+                <li data-page="transactions" data-role="admin,manager"><span class="icon">&#8372;</span> Thu chi</li>
+                <li data-page="inventory" data-role="admin,manager"><span class="icon">&#9881;</span> Kho hàng</li>
+                <li data-page="staff" data-role="admin,manager"><span class="icon">&#9786;</span> Nhân viên</li>
+                <li data-page="reports" data-role="admin,manager"><span class="icon">&#9783;</span> Báo cáo</li>
+                <li data-page="users" data-role="admin,manager"><span class="icon">&#9775;</span> Tài khoản</li>
+                <li data-page="settings" data-role="admin"><span class="icon">&#9881;</span> Cài đặt</li>
+            </ul>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <span id="display-name">Admin</span>
+                    <button id="logout-btn" class="btn btn-sm">Đăng xuất</button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content" id="main-content">
+            <!-- TOPBAR -->
+            <div class="topbar">
+                <button class="menu-toggle" id="menu-toggle">&#9776;</button>
+                <h1 class="page-title" id="page-title">Tổng quan</h1>
+                <div class="topbar-right">
+                    <span id="shift-badge" class="badge badge-warning" style="display:none">Ca đang mở</span>
+                    <span id="current-time" class="clock"></span>
+                </div>
+            </div>
+
+            <!-- PAGE: DASHBOARD -->
+            <div class="page active" id="page-dashboard">
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label">Doanh thu hôm nay</div><div class="stat-value" id="dash-revenue">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Đơn hàng</div><div class="stat-value" id="dash-orders">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Món đã bán</div><div class="stat-value" id="dash-items">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Trung bình/đơn</div><div class="stat-value" id="dash-avg">0</div></div>
+                </div>
+                <div class="grid-2">
+                    <div class="card">
+                        <h3>Doanh thu 7 ngày</h3>
+                        <div id="revenue-chart" class="bar-chart"></div>
+                    </div>
+                    <div class="card">
+                        <h3>Món bán chạy</h3>
+                        <div id="top-items"></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Đơn hàng gần đây</h3>
+                    <table class="data-table" id="dash-recent-orders">
+                        <thead><tr><th>Mã</th><th>Bàn</th><th>Tổng</th><th>Trạng thái</th><th>Thời gian</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- PAGE: POS -->
+            <div class="page" id="page-pos">
+                <div class="pos-layout">
+                    <!-- Step 1: Table Selection -->
+                    <div class="pos-step" id="pos-step-tables">
+                        <h3>Chọn bàn</h3>
+                        <div class="table-grid" id="pos-tables"></div>
+                    </div>
+                    <!-- Step 2: Menu -->
+                    <div class="pos-step" id="pos-step-menu" style="display:none">
+                        <div class="pos-menu-area">
+                            <div class="pos-menu-header">
+                                <button class="btn btn-sm" id="pos-back-tables" style="background:#E8720C;color:white;border-color:#E8720C">&#8592; Đổi bàn</button>
+                                <span class="pos-table-name" id="pos-selected-table"></span>
+                                <input type="text" class="search-input" id="pos-search" placeholder="Tìm món...">
+                            </div>
+                            <div class="menu-toolbar">
+                                <div class="category-tabs" id="pos-categories"></div>
+                                <label class="toggle-images-label"><input type="checkbox" id="toggle-images" onchange="renderPOSMenu()"> Ẩn hình</label>
+                            </div>
+                            <div class="menu-grid" id="pos-menu-items"></div>
+                        </div>
+                        <div class="pos-cart-area">
+                            <div class="cart-header">
+                                <h3>Đơn hàng</h3>
+                                <button class="btn btn-sm" id="pos-add-more" style="background:#E8720C;color:white;border-color:#E8720C">+ Thêm món</button>
+                            </div>
+                            <div class="cart-items" id="pos-cart-items"></div>
+                            <div class="cart-summary">
+                                <div class="cart-row"><span>Tạm tính:</span><span id="pos-subtotal">0đ</span></div>
+                                <div class="cart-row discount-row" id="pos-discount-row" style="display:none">
+                                    <span>Giảm giá:</span><span id="pos-discount-display">-0đ</span>
+                                </div>
+                                <div class="cart-row cart-total"><span>Tổng:</span><span id="pos-total">0đ</span></div>
+                                <div class="cart-actions">
+                                    <div class="cart-more-wrap">
+                                        <button class="btn btn-sm cart-more-btn" id="cart-more-btn">⋯</button>
+                                        <div class="cart-more-menu" id="cart-more-menu" style="display:none">
+                                            <button class="cart-menu-item" id="cart-opt-discount">💰 Giảm giá</button>
+                                            <button class="cart-menu-item" id="cart-opt-move">🔄 Chuyển bàn</button>
+                                            <button class="cart-menu-item" id="cart-opt-merge">📋 Gộp bàn</button>
+                                            <button class="cart-menu-item" id="cart-opt-split">✂️ Tách/Ghép đơn</button>
+                                            <button class="cart-menu-item" id="cart-opt-clear" style="color:#e53e3e">🗑️ Xóa hết</button>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-primary btn-block" id="pos-pay-btn" disabled>Thanh toán</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE: TABLES -->
+            <div class="page" id="page-tables">
+                <div class="page-header">
+                    <h3>Quản lý bàn</h3>
+                    <button class="btn btn-primary" id="add-table-btn">+ Thêm bàn</button>
+                </div>
+                <div class="table-grid" id="tables-grid"></div>
+            </div>
+
+            <!-- PAGE: ORDERS -->
+            <div class="page" id="page-orders">
+                <div class="page-header">
+                    <h3>Đơn hàng</h3>
+                    <div class="filters">
+                        <input type="date" id="orders-date" class="input-sm">
+                        <select id="orders-status" class="input-sm">
+                            <option value="all">Tất cả</option>
+                            <option value="pending">Đang chờ</option>
+                            <option value="paid">Đã thanh toán</option>
+                            <option value="done">Hoàn thành</option>
+                            <option value="cancelled">Đã hủy</option>
+                        </select>
+                    </div>
+                </div>
+                <table class="data-table" id="orders-table">
+                    <thead><tr><th class="hide-mobile">Mã HĐ</th><th>Bàn</th><th class="hide-mobile">Món</th><th>Tổng</th><th class="hide-mobile">Thanh toán</th><th>Trạng thái</th><th>Thời gian</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <!-- PAGE: MENU -->
+            <div class="page" id="page-menu">
+                <div class="page-header">
+                    <h3>Thực đơn</h3>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn" id="edit-categories-btn">Sửa danh mục</button>
+                        <button class="btn btn-primary" id="add-menu-btn">+ Thêm món</button>
+                    </div>
+                </div>
+                <div class="category-tabs" id="menu-categories"></div>
+                <table class="data-table" id="menu-table">
+                    <thead><tr><th>Tên</th><th class="hide-mobile">Danh mục</th><th>Giá</th><th class="hide-mobile">Trạng thái</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <!-- PAGE: SHIFTS -->
+            <div class="page" id="page-shifts">
+                <div class="page-header">
+                    <h3>Ca làm việc</h3>
+                    <button class="btn btn-primary" id="open-shift-btn">Mở ca</button>
+                </div>
+                <div id="current-shift-info" class="card" style="display:none"></div>
+                <table class="data-table" id="shifts-table">
+                    <thead><tr><th>Mã ca</th><th>Nhân viên</th><th>Mở</th><th>Đóng</th><th>Tiền đầu ca</th><th>Tiền cuối ca</th><th>Doanh thu</th><th>Trạng thái</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <!-- PAGE: TRANSACTIONS -->
+            <div class="page" id="page-transactions">
+                <div class="page-header">
+                    <h3>Thu chi</h3>
+                    <div class="filters">
+                        <input type="date" id="tx-date" class="input-sm">
+                        <select id="tx-type" class="input-sm">
+                            <option value="">Tất cả</option>
+                            <option value="income">Thu</option>
+                            <option value="expense">Chi</option>
+                        </select>
+                        <button class="btn btn-primary" id="add-tx-btn">+ Thêm</button>
+                    </div>
+                </div>
+                <div class="stats-grid stats-2">
+                    <div class="stat-card stat-green"><div class="stat-label">Tổng thu</div><div class="stat-value" id="tx-income">0</div></div>
+                    <div class="stat-card stat-red"><div class="stat-label">Tổng chi</div><div class="stat-value" id="tx-expense">0</div></div>
+                </div>
+                <table class="data-table" id="tx-table">
+                    <thead><tr><th>Mã</th><th>Loại</th><th>Danh mục</th><th>Số tiền</th><th>PT thanh toán</th><th>Mô tả</th><th>Thời gian</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <!-- PAGE: INVENTORY -->
+            <div class="page" id="page-inventory">
+                <div class="page-header">
+                    <h3>Kho hàng</h3>
+                    <button class="btn btn-primary" id="add-inv-btn">+ Thêm</button>
+                </div>
+                <table class="data-table" id="inv-table">
+                    <thead><tr><th>Tên</th><th>Số lượng</th><th>Đơn vị</th><th>Mức tối thiểu</th><th>Trạng thái</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <!-- PAGE: STAFF -->
+            <div class="page" id="page-staff">
+                <div class="page-header">
+                    <h3>Nhân viên</h3>
+                    <button class="btn btn-primary" id="add-staff-btn">+ Thêm</button>
+                </div>
+                <table class="data-table" id="staff-table">
+                    <thead><tr><th>Tên</th><th>Vị trí</th><th>SĐT</th><th>Ca</th><th>Lương</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <!-- PAGE: REPORTS -->
+            <div class="page" id="page-reports">
+                <div class="page-header">
+                    <h3>Báo cáo</h3>
+                    <div class="filters">
+                        <input type="date" id="report-from" class="input-sm">
+                        <span>đến</span>
+                        <input type="date" id="report-to" class="input-sm">
+                        <button class="btn btn-primary" id="report-load-btn">Xem</button>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label">Doanh thu</div><div class="stat-value" id="rpt-revenue">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Đơn hàng</div><div class="stat-value" id="rpt-orders">0</div></div>
+                    <div class="stat-card"><div class="stat-label">Món đã bán</div><div class="stat-value" id="rpt-items">0</div></div>
+                    <div class="stat-card"><div class="stat-label">TB/đơn</div><div class="stat-value" id="rpt-avg">0</div></div>
+                </div>
+                <div class="grid-2">
+                    <div class="card">
+                        <h3>Doanh thu theo ngày</h3>
+                        <div id="rpt-chart" class="bar-chart"></div>
+                    </div>
+                    <div class="card">
+                        <h3>Phương thức thanh toán</h3>
+                        <div id="rpt-payment"></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Sản phẩm bán chạy</h3>
+                    <div id="rpt-products"></div>
+                </div>
+                <div class="card" style="margin-top:16px">
+                    <h3>📄 Xuất báo cáo thuế (Mẫu S1a-HKD)</h3>
+                    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Sổ doanh thu bán hàng hóa, dịch vụ theo Thông tư 152/2025/TT-BTC</p>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                        <input type="date" id="tax-from" class="input-sm">
+                        <span>đến</span>
+                        <input type="date" id="tax-to" class="input-sm">
+                        <button class="btn btn-primary" id="tax-export-btn">📥 Xuất PDF</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE: USERS -->
+            <div class="page" id="page-users">
+                <div class="page-header">
+                    <h3>Quản lý tài khoản</h3>
+                    <button class="btn btn-primary" id="add-user-btn">+ Thêm tài khoản</button>
+                </div>
+                <table class="data-table" id="users-table">
+                    <thead><tr><th>Tên đăng nhập</th><th>Tên hiển thị</th><th>Quyền</th><th>Ngày tạo</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <!-- PAGE: SETTINGS -->
+            <div class="page" id="page-settings">
+                <div class="grid-2">
+                    <div class="card">
+                        <h3>Thông tin quán</h3>
+                        <form id="settings-form">
+                            <div class="form-group"><label>Tên quán</label><input type="text" id="set-name"></div>
+                            <div class="form-group"><label>Địa chỉ</label><input type="text" id="set-address"></div>
+                            <div class="form-group"><label>SĐT</label><input type="text" id="set-phone"></div>
+                            <div class="form-group"><label>Giờ mở cửa</label><input type="text" id="set-hours"></div>
+                            <div class="form-group"><label>Facebook</label><input type="text" id="set-facebook"></div>
+                            <div class="form-group"><label>Tiền tố hóa đơn</label><input type="text" id="set-prefix" maxlength="5"></div>
+                            <button type="submit" class="btn btn-primary">Lưu</button>
+                        </form>
+                    </div>
+                    <div class="card">
+                        <h3>Thanh toán / Chuyển khoản</h3>
+                        <form id="bank-form">
+                            <div class="form-group"><label>Tên ngân hàng</label><input type="text" id="set-bank-name" placeholder="VD: MB Bank, Vietcombank..."></div>
+                            <div class="form-group"><label>Số tài khoản</label><input type="text" id="set-bank-account"></div>
+                            <div class="form-group"><label>Chủ tài khoản</label><input type="text" id="set-bank-owner"></div>
+                            <div class="form-group"><label>Link ảnh QR thanh toán</label><input type="text" id="set-qr-url" placeholder="URL ảnh QR code"></div>
+                            <div id="qr-preview" style="margin-bottom:12px"></div>
+                            <button type="submit" class="btn btn-primary">Lưu thông tin thanh toán</button>
+                        </form>
+                    </div>
+                    <div class="card">
+                        <h3>Máy in hóa đơn (WiFi)</h3>
+                        <form id="printer-form">
+                            <div class="form-group"><label>IP máy in</label><input type="text" id="set-printer-ip" placeholder="VD: 192.168.1.100"></div>
+                            <div class="form-group"><label>Port</label><input type="text" id="set-printer-port" placeholder="9100" value="9100"></div>
+                            <div style="display:flex;gap:8px">
+                                <button type="submit" class="btn btn-primary">Lưu cài đặt máy in</button>
+                                <button type="button" class="btn" id="test-print-btn">🖨️ In thử</button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="card">
+                        <h3>📍 Giới hạn vị trí đăng nhập</h3>
+                        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Nhân viên chỉ được đăng nhập khi ở gần quán. Admin đăng nhập ở đâu cũng được.</p>
+                        <form id="geo-form">
+                            <div class="form-group">
+                                <label>Trạng thái</label>
+                                <select id="set-geo-restrict">
+                                    <option value="on">Bật (nhân viên phải ở gần quán)</option>
+                                    <option value="off">Tắt (ai cũng đăng nhập được)</option>
+                                </select>
+                            </div>
+                            <div class="form-group"><label>Bán kính cho phép (mét)</label><input type="number" id="set-geo-radius" value="200" min="50" max="5000"></div>
+                            <div class="form-group">
+                                <label>Vị trí quán</label>
+                                <div id="shop-location-info" style="font-size:13px;color:var(--text-muted)">Chưa thiết lập</div>
+                                <button type="button" class="btn btn-sm" id="set-shop-location-btn" style="margin-top:6px">📍 Lấy vị trí hiện tại</button>
+                                <div style="margin-top:6px;font-size:12px;color:var(--text-muted)">Hoặc nhập thủ công:</div>
+                                <div style="display:flex;gap:8px;margin-top:4px">
+                                    <input type="text" id="set-shop-lat" placeholder="Vĩ độ (lat)" class="input-sm" style="flex:1">
+                                    <input type="text" id="set-shop-lng" placeholder="Kinh độ (lng)" class="input-sm" style="flex:1">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Lưu cài đặt vị trí</button>
+                        </form>
+                    </div>
+                    <div class="card">
+                        <h3>Đổi mật khẩu</h3>
+                        <form id="password-form">
+                            <div class="form-group"><label>Mật khẩu hiện tại</label><input type="password" id="pw-old"></div>
+                            <div class="form-group"><label>Mật khẩu mới</label><input type="password" id="pw-new"></div>
+                            <div class="form-group"><label>Xác nhận mật khẩu mới</label><input type="password" id="pw-confirm"></div>
+                            <button type="submit" class="btn btn-primary">Đổi mật khẩu</button>
+                        </form>
+                    </div>
+                    <div class="card" style="margin-top:16px">
+                        <h3>📱 Tạo shortcut POS trên màn hình</h3>
+                        <div style="font-size:13px;line-height:1.8;color:var(--text-muted)">
+                            <p><strong>iPhone / iPad (Safari):</strong></p>
+                            <ol style="margin:4px 0 12px 20px">
+                                <li>Bấm nút <strong>Chia sẻ</strong> (⬆️) ở thanh dưới</li>
+                                <li>Kéo xuống chọn <strong>"Thêm vào MH chính"</strong></li>
+                                <li>Bấm <strong>Thêm</strong></li>
+                            </ol>
+                            <p><strong>Android (Chrome):</strong></p>
+                            <ol style="margin:4px 0 12px 20px">
+                                <li>Bấm <strong>⋮</strong> (3 chấm) góc phải trên</li>
+                                <li>Chọn <strong>"Thêm vào màn hình chính"</strong></li>
+                                <li>Bấm <strong>Thêm</strong></li>
+                            </ol>
+                            <p><strong>Windows (Chrome):</strong></p>
+                            <ol style="margin:4px 0 12px 20px">
+                                <li>Bấm <strong>⋮</strong> > <strong>Truyền, lưu và chia sẻ</strong></li>
+                                <li>Chọn <strong>"Tạo lối tắt..."</strong> hoặc <strong>"Cài đặt trang dưới dạng ứng dụng"</strong></li>
+                                <li>Tick <strong>"Mở dưới dạng cửa sổ"</strong> > bấm <strong>Tạo</strong></li>
+                            </ol>
+                            <p><strong>macOS (Safari):</strong></p>
+                            <ol style="margin:4px 0 0 20px">
+                                <li>Bấm <strong>File</strong> > <strong>Add to Dock</strong></li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL: PAYMENT -->
+    <div class="modal-overlay" id="modal-payment" style="display:none">
+        <div class="modal">
+            <div class="modal-header"><h3>Thanh toán</h3><button class="modal-close" data-close="modal-payment">&times;</button></div>
+            <div class="modal-body">
+                <div class="payment-summary" id="pay-summary"></div>
+                <div class="form-group"><label>Phương thức</label>
+                    <div class="payment-methods">
+                        <button class="btn pay-method active" data-method="cash">Tiền mặt</button>
+                        <button class="btn pay-method" data-method="qr">QR</button>
+                    </div>
+                </div>
+                <div class="form-group" id="pay-cash-group">
+                    <label>Khách đưa</label>
+                    <input type="number" id="pay-amount" min="0" step="1000">
+                    <div class="quick-amounts" id="pay-quick"></div>
+                    <div class="change-display">Tiền thừa: <strong id="pay-change">0đ</strong></div>
+                </div>
+                <div id="pay-transfer-group" style="display:none">
+                    <div class="bank-info-box">
+                        <div id="pay-bank-details"></div>
+                        <div id="pay-qr-image" style="text-align:center;margin-top:12px"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" data-close="modal-payment">Hủy</button>
+                <button class="btn" id="pre-print-btn" style="background:#E8A317;color:white">🖨️ In tạm tính</button>
+                <button class="btn btn-primary" id="pay-confirm-btn">Xác nhận thanh toán</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: DISCOUNT -->
+    <div class="modal-overlay" id="modal-discount" style="display:none">
+        <div class="modal modal-sm">
+            <div class="modal-header"><h3>Giảm giá</h3><button class="modal-close" data-close="modal-discount">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-group"><label>Loại giảm giá</label>
+                    <select id="disc-type"><option value="percent">Phần trăm (%)</option><option value="fixed">Số tiền cố định</option></select>
+                </div>
+                <div class="form-group"><label>Giá trị</label><input type="number" id="disc-value" min="0"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" data-close="modal-discount">Hủy</button>
+                <button class="btn btn-primary" id="disc-apply-btn">Áp dụng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: GENERIC FORM -->
+    <div class="modal-overlay" id="modal-form" style="display:none">
+        <div class="modal">
+            <div class="modal-header"><h3 id="modal-form-title">Form</h3><button class="modal-close" data-close="modal-form">&times;</button></div>
+            <div class="modal-body" id="modal-form-body"></div>
+            <div class="modal-footer">
+                <button class="btn" data-close="modal-form">Hủy</button>
+                <button class="btn btn-primary" id="modal-form-save">Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: RECEIPT -->
+    <div class="modal-overlay" id="modal-receipt" style="display:none">
+        <div class="modal modal-sm">
+            <div class="modal-header"><h3>Hóa đơn</h3><button class="modal-close" data-close="modal-receipt">&times;</button></div>
+            <div class="modal-body">
+                <div id="receipt-content" class="receipt"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" data-close="modal-receipt">Đóng</button>
+                <button class="btn btn-primary" id="print-receipt-btn">In hóa đơn</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ORDER DETAIL -->
+    <div class="modal-overlay" id="modal-order-detail" style="display:none">
+        <div class="modal">
+            <div class="modal-header"><h3>Chi tiết đơn hàng</h3><button class="modal-close" data-close="modal-order-detail">&times;</button></div>
+            <div class="modal-body" id="order-detail-body"></div>
+            <div class="modal-footer" id="order-detail-footer"></div>
+        </div>
+    </div>
+
+    <!-- MODAL: EDIT ORDER -->
+    <div class="modal-overlay" id="modal-edit-order" style="display:none">
+        <div class="modal modal-edit-order-dialog">
+            <div class="modal-header">
+                <h3>Sửa đơn &mdash; <span id="edit-order-name"></span></h3>
+                <button class="modal-close" data-close="modal-edit-order">&times;</button>
+            </div>
+            <div class="modal-body edit-order-body">
+                <div class="edit-order-cart-col">
+                    <h4 style="margin:0 0 8px;font-size:14px">Món đã chọn</h4>
+                    <div id="edit-order-cart"></div>
+                    <div id="edit-order-totals" style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)"></div>
+                </div>
+                <div class="edit-order-menu-col">
+                    <input type="text" id="edit-order-search" class="search-input" placeholder="Tìm món..." style="width:100%;margin-bottom:8px;box-sizing:border-box">
+                    <div id="edit-order-cats" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+                    <div id="edit-order-menu" class="edit-order-menu-grid"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" data-close="modal-edit-order">Hủy</button>
+                <button class="btn btn-primary" id="edit-order-save-btn">Lưu thay đổi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: SHIFT -->
+    <div class="modal-overlay" id="modal-shift" style="display:none">
+        <div class="modal modal-sm">
+            <div class="modal-header"><h3 id="shift-modal-title">Mở ca</h3><button class="modal-close" data-close="modal-shift">&times;</button></div>
+            <div class="modal-body" id="shift-modal-body"></div>
+            <div class="modal-footer">
+                <button class="btn" data-close="modal-shift">Hủy</button>
+                <button class="btn btn-primary" id="shift-modal-save">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MOBILE CART BAR -->
+    <div id="mobile-cart-bar" class="mobile-cart-bar" style="display:none">
+        <div class="mcb-info">
+            <span class="mcb-count" id="mcb-count">0 món</span>
+            <span class="mcb-total" id="mcb-total">0đ</span>
+        </div>
+        <div class="mcb-actions">
+            <div class="mcb-more-wrap">
+                <button class="btn mcb-more-btn" id="mcb-more-btn">⋯</button>
+                <div class="mcb-more-menu" id="mcb-more-menu" style="display:none">
+                    <button class="mcb-menu-item" id="mcb-opt-discount">💰 Giảm giá</button>
+                    <button class="mcb-menu-item" id="mcb-opt-move">🔄 Chuyển bàn</button>
+                    <button class="mcb-menu-item" id="mcb-opt-merge">📋 Gộp bàn</button>
+                    <button class="mcb-menu-item" id="mcb-opt-split">✂️ Tách/Ghép đơn</button>
+                </div>
+            </div>
+            <button class="btn btn-primary mcb-pay" id="mcb-pay-btn">Thanh toán</button>
+        </div>
+    </div>
+
+    <!-- MODAL: Edit categories -->
+    <div class="modal-overlay" id="modal-edit-categories" style="display:none">
+        <div class="modal">
+            <div class="modal-header"><h3>Sửa tên danh mục</h3><button class="modal-close" data-close="modal-edit-categories">&times;</button></div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:#666;margin:0 0 12px">Chỉnh sửa tên hiển thị của các danh mục.</p>
+                <div id="edit-categories-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" data-close="modal-edit-categories">Hủy</button>
+                <button class="btn btn-primary" id="save-categories-btn">Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="/pos/script.js?v=51"></script>
+</body>
+</html>

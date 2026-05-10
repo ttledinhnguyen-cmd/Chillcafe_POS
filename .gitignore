@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+
+# Database (chứa data khách thật - KHÔNG push)
+data/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Uploads (file ảnh menu, có thể lớn)
+uploads/
+
+# Backup files
+*.bak
+*.bak-*
+*.bak.*
+*.old
+*.old.*
+*.backup
+*.backup.*
+*.fixed
+*.fixed.*
+
+# Sessions / secrets
+cookies*.txt
+.env
+.env.*
+
+# Android binary (dùng GitHub Releases nếu cần versioning)
+*.apk
+
+# Logs
+*.log
+logs/
+
+# OS / Editor
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
+
+# Android build artifacts
+build/
+.gradle/
+.cxx/
+*.iml
+local.properties
+captures/
