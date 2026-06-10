@@ -313,8 +313,8 @@ function applyRolePermissions() {
 
 $('#toggle-password')?.addEventListener('click', () => {
     const pw = $('#login-password');
-    if (pw.type === 'password') { pw.type = 'text'; $('#toggle-password').textContent = '🙈'; }
-    else { pw.type = 'password'; $('#toggle-password').textContent = '👁️'; }
+    if (pw.type === 'password') { pw.type = 'text'; $('#toggle-password').innerHTML = '<svg class="ico" viewBox="0 0 24 24"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>'; }
+    else { pw.type = 'password'; $('#toggle-password').innerHTML = '<svg class="ico" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>'; }
 });
 
 $('#login-form').addEventListener('submit', async (e) => {
@@ -918,6 +918,10 @@ function moveTable() {
 }
 
 window.confirmMoveTable = async function(targetId, targetName) {
+    // Cancel any pending debounced auto-save for the source table; otherwise it
+    // fires after the DEL below and re-creates the source order (table A lingers).
+    clearTimeout(App._syncTimer);
+    App._syncTimer = null;
     if (App.selectedTable && App.cart.length > 0) {
         const tid = App.selectedTable.id;
         const existing = App.tableOrders[tid];
@@ -1410,17 +1414,17 @@ window.viewOrder = async (id) => {
         const footer = $('#order-detail-footer');
         let btns = `<button class="btn" id="od-close-btn">Đóng</button>`;
         if (order.status === 'paid') {
-            btns += `<button class="btn" id="od-reprint-btn">🖨️ In lại</button>`;
+            btns += `<button class="btn" id="od-reprint-btn"><svg class="ico" viewBox="0 0 24 24"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg> In lại</button>`;
         }
         if (order.status === 'pending') {
-            btns += `<button class="btn" id="od-edit-btn">✏️ Sửa đơn</button>`;
+            btns += `<button class="btn" id="od-edit-btn"><svg class="ico" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg> Sửa đơn</button>`;
             btns += `<button class="btn btn-success" id="od-pay-btn">Thanh toán</button>`;
         }
         if (order.status === 'paid' && App.user?.role === 'admin') {
-            btns += `<button class="btn" id="od-edit-btn">✏️ Sửa đơn</button>`;
+            btns += `<button class="btn" id="od-edit-btn"><svg class="ico" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg> Sửa đơn</button>`;
         }
         if (App.user?.role === 'admin') {
-            btns += `<button class="btn btn-danger" id="od-delete-btn">🗑️ Xóa</button>`;
+            btns += `<button class="btn btn-danger" id="od-delete-btn"><svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg> Xóa</button>`;
         }
         footer.innerHTML = btns;
         footer.querySelector('#od-close-btn')?.addEventListener('click', () => closeModal('modal-order-detail'));
@@ -1598,7 +1602,7 @@ window.deleteOrder = async (id) => {
             </div>
             <div class="modal-footer">
                 <button class="btn" id="del-cancel">Hủy</button>
-                <button class="btn btn-danger" id="del-confirm">🗑️ Xác nhận xóa</button>
+                <button class="btn btn-danger" id="del-confirm"><svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg> Xác nhận xóa</button>
             </div>
         </div>
     `;
@@ -2336,11 +2340,11 @@ async function loadSettings() {
         if ($('#set-geo-radius')) $('#set-geo-radius').value = s.geo_radius || '200';
         if ($('#shop-location-info')) {
             if (s.shop_lat && s.shop_lng) {
-                $('#shop-location-info').innerHTML = `✅ Vị trí quán: ${parseFloat(s.shop_lat).toFixed(6)}, ${parseFloat(s.shop_lng).toFixed(6)}`;
+                $('#shop-location-info').innerHTML = `<svg class="ico" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Vị trí quán: ${parseFloat(s.shop_lat).toFixed(6)}, ${parseFloat(s.shop_lng).toFixed(6)}`;
                 if ($('#set-shop-lat')) $('#set-shop-lat').value = s.shop_lat;
                 if ($('#set-shop-lng')) $('#set-shop-lng').value = s.shop_lng;
             } else {
-                $('#shop-location-info').innerHTML = '⚠️ Chưa thiết lập vị trí quán';
+                $('#shop-location-info').innerHTML = '<svg class="ico" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><path d="M12 17h.01"/></svg> Chưa thiết lập vị trí quán';
             }
         }
     } catch (err) { toast(err.message, 'error'); }
@@ -2376,7 +2380,7 @@ $('#set-shop-location-btn')?.addEventListener('click', () => {
         (pos) => {
             $('#set-shop-lat').value = pos.coords.latitude.toFixed(6);
             $('#set-shop-lng').value = pos.coords.longitude.toFixed(6);
-            $('#shop-location-info').innerHTML = `📍 Vị trí mới: ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)} (chưa lưu)`;
+            $('#shop-location-info').innerHTML = `<svg class="ico" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Vị trí mới: ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)} (chưa lưu)`;
             toast('Đã lấy vị trí! Bấm "Lưu" để áp dụng.');
         },
         (err) => { toast('Không lấy được vị trí: ' + err.message, 'error'); },

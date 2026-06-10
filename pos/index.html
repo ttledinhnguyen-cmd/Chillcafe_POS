@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Chill POS">
     <link rel="apple-touch-icon" href="/picture/pwa/apple-touch-icon.png">
-    <link rel="stylesheet" href="/pos/style.css?v=45">
+    <link rel="stylesheet" href="/pos/style.css?v=46">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -37,7 +37,7 @@
                     <label>Mật khẩu</label>
                     <div style="position:relative">
                         <input type="password" id="login-password" autocomplete="current-password" required style="padding-right:40px">
-                        <span id="toggle-password" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:18px;color:#888;user-select:none">👁️</span>
+                        <span id="toggle-password" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:18px;color:#888;user-select:none"><svg class="ico" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
                     </div>
                 </div>
                 <label class="remember-me"><input type="checkbox" id="login-remember" checked> Nhớ đăng nhập</label>
@@ -60,18 +60,18 @@
                 </div>
             </div>
             <ul class="sidebar-menu">
-                <li data-page="dashboard" class="active"><span class="icon">&#9632;</span> Tổng quan</li>
-                <li data-page="pos"><span class="icon">&#9733;</span> Bán hàng (POS)</li>
-                <li data-page="tables" data-role="admin,manager"><span class="icon">&#9635;</span> Bàn</li>
-                <li data-page="orders"><span class="icon">&#9776;</span> Đơn hàng</li>
-                <li data-page="menu" data-role="admin,manager"><span class="icon">&#9749;</span> Thực đơn</li>
-                <li data-page="shifts" data-role="admin,manager"><span class="icon">&#9200;</span> Ca làm việc</li>
-                <li data-page="transactions" data-role="admin,manager"><span class="icon">&#8372;</span> Thu chi</li>
-                <li data-page="inventory" data-role="admin,manager"><span class="icon">&#9881;</span> Kho hàng</li>
-                <li data-page="staff" data-role="admin,manager"><span class="icon">&#9786;</span> Nhân viên</li>
-                <li data-page="reports" data-role="admin,manager"><span class="icon">&#9783;</span> Báo cáo</li>
-                <li data-page="users" data-role="admin,manager"><span class="icon">&#9775;</span> Tài khoản</li>
-                <li data-page="settings" data-role="admin"><span class="icon">&#9881;</span> Cài đặt</li>
+                <li data-page="dashboard" class="active"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></span> Tổng quan</li>
+                <li data-page="pos"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg></span> Bán hàng (POS)</li>
+                <li data-page="tables" data-role="admin,manager"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg></span> Bàn</li>
+                <li data-page="orders"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg></span> Đơn hàng</li>
+                <li data-page="menu" data-role="admin,manager"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></svg></span> Thực đơn</li>
+                <li data-page="shifts" data-role="admin,manager"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> Ca làm việc</li>
+                <li data-page="transactions" data-role="admin,manager"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg></span> Thu chi</li>
+                <li data-page="inventory" data-role="admin,manager"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span> Kho hàng</li>
+                <li data-page="staff" data-role="admin,manager"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Nhân viên</li>
+                <li data-page="reports" data-role="admin,manager"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></span> Báo cáo</li>
+                <li data-page="users" data-role="admin,manager"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg></span> Tài khoản</li>
+                <li data-page="settings" data-role="admin"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span> Cài đặt</li>
             </ul>
             <div class="sidebar-footer">
                 <div class="user-info">
@@ -85,7 +85,7 @@
         <main class="main-content" id="main-content">
             <!-- TOPBAR -->
             <div class="topbar">
-                <button class="menu-toggle" id="menu-toggle">&#9776;</button>
+                <button class="menu-toggle" id="menu-toggle"><svg class="ico" viewBox="0 0 24 24"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg></button>
                 <h1 class="page-title" id="page-title">Tổng quan</h1>
                 <div class="topbar-right">
                     <span id="shift-badge" class="badge badge-warning" style="display:none">Ca đang mở</span>
@@ -132,7 +132,7 @@
                     <div class="pos-step" id="pos-step-menu" style="display:none">
                         <div class="pos-menu-area">
                             <div class="pos-menu-header">
-                                <button class="btn btn-sm" id="pos-back-tables" style="background:#E8720C;color:white;border-color:#E8720C">&#8592; Đổi bàn</button>
+                                <button class="btn btn-sm" id="pos-back-tables" style="background:#E8720C;color:white;border-color:#E8720C"><svg class="ico" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg> Đổi bàn</button>
                                 <span class="pos-table-name" id="pos-selected-table"></span>
                                 <input type="text" class="search-input" id="pos-search" placeholder="Tìm món...">
                             </div>
@@ -158,11 +158,11 @@
                                     <div class="cart-more-wrap">
                                         <button class="btn btn-sm cart-more-btn" id="cart-more-btn">⋯</button>
                                         <div class="cart-more-menu" id="cart-more-menu" style="display:none">
-                                            <button class="cart-menu-item" id="cart-opt-discount">💰 Giảm giá</button>
-                                            <button class="cart-menu-item" id="cart-opt-move">🔄 Chuyển bàn</button>
-                                            <button class="cart-menu-item" id="cart-opt-merge">📋 Gộp bàn</button>
-                                            <button class="cart-menu-item" id="cart-opt-split">✂️ Tách/Ghép đơn</button>
-                                            <button class="cart-menu-item" id="cart-opt-clear" style="color:#e53e3e">🗑️ Xóa hết</button>
+                                            <button class="cart-menu-item" id="cart-opt-discount"><svg class="ico" viewBox="0 0 24 24"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg> Giảm giá</button>
+                                            <button class="cart-menu-item" id="cart-opt-move"><svg class="ico" viewBox="0 0 24 24"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg> Chuyển bàn</button>
+                                            <button class="cart-menu-item" id="cart-opt-merge"><svg class="ico" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg> Gộp bàn</button>
+                                            <button class="cart-menu-item" id="cart-opt-split"><svg class="ico" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg> Tách/Ghép đơn</button>
+                                            <button class="cart-menu-item" id="cart-opt-clear" style="color:#e53e3e"><svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg> Xóa hết</button>
                                         </div>
                                     </div>
                                     <button class="btn btn-primary btn-block" id="pos-pay-btn" disabled>Thanh toán</button>
@@ -312,13 +312,13 @@
                     <div id="rpt-products"></div>
                 </div>
                 <div class="card" style="margin-top:16px">
-                    <h3>📄 Xuất báo cáo thuế (Mẫu S1a-HKD)</h3>
+                    <h3><svg class="ico" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v5h5"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg> Xuất báo cáo thuế (Mẫu S1a-HKD)</h3>
                     <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Sổ doanh thu bán hàng hóa, dịch vụ theo Thông tư 152/2025/TT-BTC</p>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                         <input type="date" id="tax-from" class="input-sm">
                         <span>đến</span>
                         <input type="date" id="tax-to" class="input-sm">
-                        <button class="btn btn-primary" id="tax-export-btn">📥 Xuất PDF</button>
+                        <button class="btn btn-primary" id="tax-export-btn"><svg class="ico" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Xuất PDF</button>
                     </div>
                 </div>
             </div>
@@ -368,12 +368,12 @@
                             <div class="form-group"><label>Port</label><input type="text" id="set-printer-port" placeholder="9100" value="9100"></div>
                             <div style="display:flex;gap:8px">
                                 <button type="submit" class="btn btn-primary">Lưu cài đặt máy in</button>
-                                <button type="button" class="btn" id="test-print-btn">🖨️ In thử</button>
+                                <button type="button" class="btn" id="test-print-btn"><svg class="ico" viewBox="0 0 24 24"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg> In thử</button>
                             </div>
                         </form>
                     </div>
                     <div class="card">
-                        <h3>📍 Giới hạn vị trí đăng nhập</h3>
+                        <h3><svg class="ico" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Giới hạn vị trí đăng nhập</h3>
                         <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Nhân viên chỉ được đăng nhập khi ở gần quán. Admin đăng nhập ở đâu cũng được.</p>
                         <form id="geo-form">
                             <div class="form-group">
@@ -387,7 +387,7 @@
                             <div class="form-group">
                                 <label>Vị trí quán</label>
                                 <div id="shop-location-info" style="font-size:13px;color:var(--text-muted)">Chưa thiết lập</div>
-                                <button type="button" class="btn btn-sm" id="set-shop-location-btn" style="margin-top:6px">📍 Lấy vị trí hiện tại</button>
+                                <button type="button" class="btn btn-sm" id="set-shop-location-btn" style="margin-top:6px"><svg class="ico" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Lấy vị trí hiện tại</button>
                                 <div style="margin-top:6px;font-size:12px;color:var(--text-muted)">Hoặc nhập thủ công:</div>
                                 <div style="display:flex;gap:8px;margin-top:4px">
                                     <input type="text" id="set-shop-lat" placeholder="Vĩ độ (lat)" class="input-sm" style="flex:1">
@@ -407,11 +407,11 @@
                         </form>
                     </div>
                     <div class="card" style="margin-top:16px">
-                        <h3>📱 Tạo shortcut POS trên màn hình</h3>
+                        <h3><svg class="ico" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><path d="M12 18h.01"/></svg> Tạo shortcut POS trên màn hình</h3>
                         <div style="font-size:13px;line-height:1.8;color:var(--text-muted)">
                             <p><strong>iPhone / iPad (Safari):</strong></p>
                             <ol style="margin:4px 0 12px 20px">
-                                <li>Bấm nút <strong>Chia sẻ</strong> (⬆️) ở thanh dưới</li>
+                                <li>Bấm nút <strong>Chia sẻ</strong> (<svg class="ico" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>) ở thanh dưới</li>
                                 <li>Kéo xuống chọn <strong>"Thêm vào MH chính"</strong></li>
                                 <li>Bấm <strong>Thêm</strong></li>
                             </ol>
@@ -465,7 +465,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn" data-close="modal-payment">Hủy</button>
-                <button class="btn" id="pre-print-btn" style="background:#E8A317;color:white">🖨️ In tạm tính</button>
+                <button class="btn" id="pre-print-btn" style="background:#E8A317;color:white"><svg class="ico" viewBox="0 0 24 24"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg> In tạm tính</button>
                 <button class="btn btn-primary" id="pay-confirm-btn">Xác nhận thanh toán</button>
             </div>
         </div>
@@ -571,10 +571,10 @@
             <div class="mcb-more-wrap">
                 <button class="btn mcb-more-btn" id="mcb-more-btn">⋯</button>
                 <div class="mcb-more-menu" id="mcb-more-menu" style="display:none">
-                    <button class="mcb-menu-item" id="mcb-opt-discount">💰 Giảm giá</button>
-                    <button class="mcb-menu-item" id="mcb-opt-move">🔄 Chuyển bàn</button>
-                    <button class="mcb-menu-item" id="mcb-opt-merge">📋 Gộp bàn</button>
-                    <button class="mcb-menu-item" id="mcb-opt-split">✂️ Tách/Ghép đơn</button>
+                    <button class="mcb-menu-item" id="mcb-opt-discount"><svg class="ico" viewBox="0 0 24 24"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg> Giảm giá</button>
+                    <button class="mcb-menu-item" id="mcb-opt-move"><svg class="ico" viewBox="0 0 24 24"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg> Chuyển bàn</button>
+                    <button class="mcb-menu-item" id="mcb-opt-merge"><svg class="ico" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg> Gộp bàn</button>
+                    <button class="mcb-menu-item" id="mcb-opt-split"><svg class="ico" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg> Tách/Ghép đơn</button>
                 </div>
             </div>
             <button class="btn btn-primary mcb-pay" id="mcb-pay-btn">Thanh toán</button>
