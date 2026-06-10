@@ -101,6 +101,7 @@ function connectSSE() {
                 // Clear table order after payment
                 if (data.type === 'order_paid' && data.tableId) {
                     delete App.tableOrders[data.tableId];
+                    clearPendingOrder(data.tableId);
                     if (App.selectedTable && App.selectedTable.id === data.tableId) {
                         App.cart = [];
                         App.discount = { type: '', value: 0 };
@@ -130,22 +131,85 @@ function connectSSE() {
     };
 }
 
+// ===== OFFLINE-SAFE TABLE ORDER SYNC =====
+// On weak/lost network a table-order write (PUT/DELETE) can fail. We queue the
+// intended state in localStorage so it survives a page reload and keep retrying
+// until the server accepts it — otherwise orders entered offline vanish on reload.
+const PENDING_ORDERS_KEY = 'pos_pending_table_orders';
+
+function loadPendingOrders() {
+    try { return JSON.parse(localStorage.getItem(PENDING_ORDERS_KEY)) || {}; }
+    catch (e) { return {}; }
+}
+function savePendingOrders(p) {
+    try { localStorage.setItem(PENDING_ORDERS_KEY, JSON.stringify(p)); } catch (e) {}
+}
+function setPendingOrder(tableId, intent) {
+    const p = loadPendingOrders();
+    p[tableId] = intent; // intent: order object (upsert) or null (delete)
+    savePendingOrders(p);
+}
+function clearPendingOrder(tableId) {
+    const p = loadPendingOrders();
+    if (tableId in p) { delete p[tableId]; savePendingOrders(p); }
+}
+
+async function pushTableOrder(tableId, intent) {
+    if (intent && intent.cart && intent.cart.length > 0) {
+        await api.put('/api/table-orders/' + tableId, intent);
+    } else {
+        await api.del('/api/table-orders/' + tableId);
+    }
+}
+
 async function loadTableOrdersFromServer() {
     try {
         App.tableOrders = await api.get('/api/table-orders');
-    } catch (e) { console.warn('Failed to load table orders:', e); }
+    } catch (e) {
+        console.warn('Failed to load table orders:', e);
+        if (!App.tableOrders) App.tableOrders = {};
+    }
+    // Overlay unsynced local changes so they survive reloads on weak network
+    const pending = loadPendingOrders();
+    for (const tid of Object.keys(pending)) {
+        const intent = pending[tid];
+        if (intent && intent.cart && intent.cart.length > 0) App.tableOrders[tid] = intent;
+        else delete App.tableOrders[tid];
+    }
+    retryPendingOrders();
 }
 
 async function syncTableOrderToServer(tableId) {
     const order = App.tableOrders[tableId];
+    const intent = (order && order.cart && order.cart.length > 0) ? order : null;
+    // Persist the intent first so it is not lost if the request fails or the page reloads
+    setPendingOrder(tableId, intent);
     try {
-        if (order && order.cart.length > 0) {
-            await api.put('/api/table-orders/' + tableId, order);
-        } else {
-            await api.del('/api/table-orders/' + tableId);
-        }
-    } catch (e) { console.warn('Sync table order failed:', e); }
+        await pushTableOrder(tableId, intent);
+        clearPendingOrder(tableId); // confirmed by server
+    } catch (e) {
+        console.warn('Sync table order failed (queued for retry):', e);
+    }
 }
+
+let retryingPendingOrders = false;
+async function retryPendingOrders() {
+    if (retryingPendingOrders) return;
+    const pending = loadPendingOrders();
+    const ids = Object.keys(pending);
+    if (!ids.length) return;
+    retryingPendingOrders = true;
+    try {
+        for (const tid of ids) {
+            try {
+                await pushTableOrder(tid, pending[tid]);
+                clearPendingOrder(tid);
+            } catch (e) { /* keep queued, retry later */ }
+        }
+    } finally { retryingPendingOrders = false; }
+}
+setInterval(retryPendingOrders, 15000);
+window.addEventListener('online', retryPendingOrders);
 
 // ===== UTILS =====
 function fmt(n) {
