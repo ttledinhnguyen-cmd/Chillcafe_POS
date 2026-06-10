@@ -256,6 +256,16 @@ function statusBadge(status) {
     return `<span class="badge badge-${cls}">${label}</span>`;
 }
 
+// Menu items use their own wording (avoid the table "Trống" label)
+function menuStatusBadge(status) {
+    const map = {
+        available: ['Còn hàng', 'success'],
+        soldout: ['Hết hàng', 'danger'],
+    };
+    const [label, cls] = map[status] || [status, 'default'];
+    return `<span class="badge badge-${cls}">${label}</span>`;
+}
+
 function paymentLabel(method) {
     const map = { cash: 'Tiền mặt', transfer: 'Chuyển khoản', card: 'Thẻ', qr: 'QR' };
     return map[method] || method || '';
@@ -1756,7 +1766,7 @@ function renderMenuTable(menu) {
         </div></td>
         <td class="hide-mobile">${categoryLabels[m.category] || m.category}</td>
         <td>${fmt(m.price)}</td>
-        <td class="hide-mobile">${statusBadge(m.status)}</td>
+        <td class="hide-mobile">${menuStatusBadge(m.status)}</td>
         <td class="actions">
             <button class="btn btn-sm" onclick="editMenuItem('${m.id}')">Sửa</button>
             <button class="btn btn-sm btn-danger" onclick="deleteMenuItem('${m.id}')">Xóa</button>
