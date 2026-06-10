@@ -1,0 +1,33 @@
+{
+  "name": "Chill Cafe - Quán Cà Phê",
+  "short_name": "Chill Cafe",
+  "description": "Chill Cafe - Quán cà phê tại Phước Tân, Khánh Hòa. Không gian thư giãn, cà phê ngon.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f9fa",
+  "theme_color": "#2D3436",
+  "lang": "vi",
+  "categories": ["food", "lifestyle"],
+  "icons": [
+    {
+      "src": "picture/pwa/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "picture/pwa/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "picture/pwa/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
