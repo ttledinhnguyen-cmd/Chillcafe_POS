@@ -505,7 +505,11 @@ a { color: var(--primary); text-decoration: none; }
         padding: 0 8px; gap: 6px;
     }
     .page-title { font-size: 13px; }
-    .main-content > .page { padding-top: 56px; }
+    /* Push page content below fixed topbar (higher specificity than the
+       body[data-device="phone"] .page padding rule; POS manages its own
+       fixed sub-headers so it is excluded) */
+    body[data-device="phone"] .main-content > .page:not(#page-pos),
+    .main-content > .page:not(#page-pos) { padding-top: 56px; }
 
     .page-header { flex-direction: column !important; align-items: stretch !important; gap: 8px !important; margin-bottom: 8px; }
     .page-header h3 { font-size: 16px; margin: 0; }
