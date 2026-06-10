@@ -647,6 +647,8 @@ function selectTable(id) {
 
     $('#pos-selected-table').textContent = table.name;
     App.currentCategory = 'all';
+    const posSearch = $('#pos-search');
+    if (posSearch) posSearch.value = '';
     renderPOSCategories();
     renderPOSMenu();
     renderCart();
