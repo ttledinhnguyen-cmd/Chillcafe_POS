@@ -305,6 +305,8 @@ async function loadCategoryLabels() {
 }
 const roleLabels = { barista: 'Pha chế', cashier: 'Thu ngân', waiter: 'Phục vụ', kitchen: 'Bếp', manager: 'Quản lý' };
 const shiftLabels = { morning: 'Sáng', afternoon: 'Chiều', full: 'Cả ngày' };
+const payTypeLabels = { hour: 'Theo giờ', shift: 'Theo buổi', month: 'Theo tháng' };
+const payTypeUnit = { hour: 'giờ', shift: 'buổi', month: 'tháng' };
 const userRoleLabels = { admin: 'Quản trị viên', manager: 'Quản lý', cashier: 'Thu ngân', staff: 'Nhân viên' };
 const userRoleColors = { admin: 'danger', manager: 'warning', cashier: 'success', staff: 'default' };
 
@@ -1988,7 +1990,8 @@ async function loadShifts() {
                     <div class="shift-stat"><div class="value">${fmt(st.income)}</div><div class="label">Tổng thu</div></div>
                     <div class="shift-stat"><div class="value">${fmt(st.expense)}</div><div class="label">Tổng chi</div></div>
                 </div>
-                <div style="margin-top:12px;text-align:right">
+                <div style="margin-top:12px;text-align:right;display:flex;gap:8px;justify-content:flex-end">
+                    ${hasPerm('shift.manage') ? `<button class="btn" onclick="editShiftStaff(${s.id},'${s.staff_id || ''}')">Nhân viên ca</button>` : ''}
                     <button class="btn btn-danger" onclick="closeShift(${s.id})">Đóng ca</button>
                 </div>
             `;
@@ -2008,17 +2011,56 @@ async function loadShifts() {
             <td>${s.close_amount !== null ? fmt(s.close_amount) : '-'}</td>
             <td><strong style="color:var(--primary)">${fmt(s.revenue || 0)}</strong><br><span style="font-size:11px;color:var(--text-muted)">${s.orderCount || 0} đơn</span></td>
             <td>${statusBadge(s.status)}</td>
-            <td>${s.status === 'open' ? `<button class="btn btn-sm btn-danger" onclick="closeShift(${s.id})">Đóng</button>` : ''}</td>
+            <td class="actions">
+                ${hasPerm('shift.manage') ? `<button class="btn btn-sm" onclick="editShiftStaff(${s.id},'${s.staff_id || ''}')">NV</button>` : ''}
+                ${s.status === 'open' ? `<button class="btn btn-sm btn-danger" onclick="closeShift(${s.id})">Đóng</button>` : ''}
+            </td>
         </tr>`).join('');
     } catch (err) { toast(err.message, 'error'); }
 }
 
+window.editShiftStaff = async function(shiftId, openerId) {
+    try {
+        const [staff, attendance] = await Promise.all([api.get('/api/staff'), api.get('/api/shifts/' + shiftId + '/staff')]);
+        const active = staff.filter(s => s.status !== 'inactive');
+        const attIds = new Set(attendance.map(a => a.staff_id));
+        let html = '<div style="padding:4px">';
+        html += '<div style="margin-bottom:12px"><label style="font-size:13px;font-weight:600">Người mở ca</label><br>'
+            + '<select id="att-opener" style="margin-top:4px;padding:6px;border:1px solid var(--border);border-radius:6px;min-width:180px">'
+            + active.map(s => `<option value="${s.id}" ${s.id === openerId ? 'selected' : ''}>${s.name}</option>`).join('')
+            + '</select></div>';
+        html += '<div style="font-size:13px;color:var(--text-muted);margin-bottom:6px">Điểm danh nhân viên làm trong ca này:</div>';
+        html += active.map(s => `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;cursor:pointer"><input type="checkbox" class="att-cb" data-sid="${s.id}" ${attIds.has(s.id) ? 'checked' : ''}> ${s.name} <span style="color:var(--text-muted);font-size:12px">(${roleLabels[s.role] || s.role})</span></label>`).join('');
+        html += '</div>';
+        showTableOpModal('Nhân viên trong ca', html);
+        const body = document.querySelector('#modal-payment .modal-body');
+        body.querySelector('#att-opener')?.addEventListener('change', async (e) => {
+            try {
+                await api.put('/api/shifts/' + shiftId, { staff_id: e.target.value });
+                const cb = body.querySelector(`.att-cb[data-sid="${e.target.value}"]`); if (cb) cb.checked = true;
+                toast('Đã đổi người mở ca'); loadShifts();
+            } catch (err) { toast(err.message, 'error'); }
+        });
+        body.querySelectorAll('.att-cb').forEach(cb => {
+            cb.addEventListener('change', async () => {
+                const sid = cb.dataset.sid;
+                try {
+                    if (cb.checked) await api.post('/api/shifts/' + shiftId + '/staff', { staff_id: sid });
+                    else await api.del('/api/shifts/' + shiftId + '/staff/' + sid);
+                } catch (err) { toast(err.message, 'error'); cb.checked = !cb.checked; }
+            });
+        });
+    } catch (e) { toast(e.message, 'error'); }
+};
+
 $('#open-shift-btn').addEventListener('click', () => {
-    const staffList = [];
     api.get('/api/staff').then(staff => {
         const activeStaff = staff.filter(s => s.status !== 'inactive');
+        const staffField = activeStaff.length
+            ? { key: 'staff_id', label: 'Nhân viên mở ca', type: 'select', options: activeStaff.map(s => [s.id, s.name]), required: true }
+            : { key: 'staff_name', label: 'Nhân viên mở ca', type: 'text', required: true };
         showFormModal('Mở ca làm việc', [
-            { key: 'staff_name', label: 'Nhân viên', type: 'text', required: true },
+            staffField,
             { key: 'open_amount', label: 'Tiền đầu ca', type: 'number', value: 0 },
             { key: 'note', label: 'Ghi chú', type: 'text' },
         ], async (data) => {
@@ -2026,7 +2068,7 @@ $('#open-shift-btn').addEventListener('click', () => {
             toast('Đã mở ca');
             loadShifts();
         });
-    });
+    }).catch(() => toast('Không tải được danh sách nhân viên', 'error'));
 });
 
 window.closeShift = (id) => {
@@ -2163,12 +2205,13 @@ async function loadStaff() {
             <td>${roleLabels[s.role] || s.role}</td>
             <td>${s.phone || '-'}</td>
             <td>${shiftLabels[s.shift] || s.shift}</td>
-            <td>${fmt(s.salary)}</td>
+            <td>${payTypeLabels[s.pay_type || 'month']} · ${fmt(s.salary)}${s.pay_type && s.pay_type !== 'month' ? '/' + payTypeUnit[s.pay_type] : ''}</td>
             <td class="actions">
                 <button class="btn btn-sm" onclick="editStaff('${s.id}')">Sửa</button>
                 <button class="btn btn-sm btn-danger" onclick="deleteStaff('${s.id}')">Xóa</button>
             </td>
         </tr>`).join('');
+        loadPayroll();
     } catch (err) { toast(err.message, 'error'); }
 }
 
@@ -2178,7 +2221,8 @@ $('#add-staff-btn').addEventListener('click', () => {
         { key: 'role', label: 'Vị trí', type: 'select', options: Object.entries(roleLabels) },
         { key: 'phone', label: 'SĐT', type: 'text' },
         { key: 'shift', label: 'Ca', type: 'select', options: Object.entries(shiftLabels) },
-        { key: 'salary', label: 'Lương', type: 'number', value: 0 },
+        { key: 'pay_type', label: 'Hình thức trả', type: 'select', options: Object.entries(payTypeLabels) },
+        { key: 'salary', label: 'Đơn giá (đ/giờ, đ/buổi, hoặc đ/tháng)', type: 'number', value: 0 },
     ], async (data) => {
         await api.post('/api/staff', data);
         toast('Đã thêm nhân viên');
@@ -2195,7 +2239,8 @@ window.editStaff = async (id) => {
         { key: 'role', label: 'Vị trí', type: 'select', value: s.role, options: Object.entries(roleLabels) },
         { key: 'phone', label: 'SĐT', type: 'text', value: s.phone },
         { key: 'shift', label: 'Ca', type: 'select', value: s.shift, options: Object.entries(shiftLabels) },
-        { key: 'salary', label: 'Lương', type: 'number', value: s.salary },
+        { key: 'pay_type', label: 'Hình thức trả', type: 'select', value: s.pay_type || 'month', options: Object.entries(payTypeLabels) },
+        { key: 'salary', label: 'Đơn giá (đ/giờ, đ/buổi, hoặc đ/tháng)', type: 'number', value: s.salary },
     ], async (data) => {
         data.id = id;
         await api.post('/api/staff', data);
@@ -2209,6 +2254,96 @@ window.deleteStaff = async (id) => {
     try { await api.del(`/api/staff/${id}`); toast('Đã xóa'); loadStaff(); }
     catch (err) { toast(err.message, 'error'); }
 };
+
+// ===== PAYROLL (bảng tính lương — nhập tay theo tháng) =====
+let _payrollWired = false;
+function ensurePayrollPeriod() {
+    const el = document.getElementById('payroll-period');
+    if (!el) return '';
+    if (!el.value) { const d = new Date(); el.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+    return el.value;
+}
+function payrollRowHtml(id, name, pt, rate, qty, allowance, deduction, note) {
+    const opts = Object.entries(payTypeLabels).map(([v, l]) => `<option value="${v}" ${v === pt ? 'selected' : ''}>${l}</option>`).join('');
+    const inp = (cls, val) => `<input class="${cls}" type="number" value="${val}" style="width:96px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:13px">`;
+    return `<tr data-sid="${id}">
+        <td>${name}</td>
+        <td><select class="pr-type" style="padding:4px;border:1px solid var(--border);border-radius:4px;font-size:13px">${opts}</select></td>
+        <td>${inp('pr-rate', rate)}</td>
+        <td>${inp('pr-qty', qty)}</td>
+        <td class="pr-base" style="font-weight:600">0d</td>
+        <td>${inp('pr-allowance', allowance)}</td>
+        <td>${inp('pr-deduction', deduction)}</td>
+        <td class="pr-net" style="font-weight:700;color:var(--primary)">0d</td>
+        <td><input class="pr-note" type="text" value="${String(note || '').replace(/"/g, '&quot;')}" style="width:140px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:13px"></td>
+    </tr>`;
+}
+function recalcPayrollRow(tr) {
+    if (!tr || !tr.querySelector) return;
+    const type = tr.querySelector('.pr-type')?.value || 'month';
+    const rate = Number(tr.querySelector('.pr-rate')?.value) || 0;
+    const qty = Number(tr.querySelector('.pr-qty')?.value) || 0;
+    const allowance = Number(tr.querySelector('.pr-allowance')?.value) || 0;
+    const deduction = Number(tr.querySelector('.pr-deduction')?.value) || 0;
+    const base = type === 'month' ? rate : rate * qty;
+    const qtyEl = tr.querySelector('.pr-qty'); if (qtyEl) { qtyEl.disabled = (type === 'month'); qtyEl.style.opacity = type === 'month' ? '.4' : '1'; }
+    const baseEl = tr.querySelector('.pr-base'); if (baseEl) baseEl.textContent = fmt(base);
+    const netEl = tr.querySelector('.pr-net'); if (netEl) netEl.textContent = fmt(base + allowance - deduction);
+    recalcPayrollTotal();
+}
+function recalcPayrollTotal() {
+    let total = 0;
+    document.querySelectorAll('#payroll-table tbody tr').forEach(tr => {
+        const type = tr.querySelector('.pr-type')?.value || 'month';
+        const rate = Number(tr.querySelector('.pr-rate')?.value) || 0;
+        const qty = Number(tr.querySelector('.pr-qty')?.value) || 0;
+        const allowance = Number(tr.querySelector('.pr-allowance')?.value) || 0;
+        const deduction = Number(tr.querySelector('.pr-deduction')?.value) || 0;
+        total += (type === 'month' ? rate : rate * qty) + allowance - deduction;
+    });
+    const el = document.getElementById('payroll-total'); if (el) el.textContent = fmt(total);
+}
+async function loadPayroll() {
+    const tbody = document.querySelector('#payroll-table tbody');
+    if (!tbody) return;
+    const period = ensurePayrollPeriod();
+    if (!_payrollWired) {
+        _payrollWired = true;
+        document.getElementById('payroll-period')?.addEventListener('change', loadPayroll);
+        document.getElementById('payroll-reload')?.addEventListener('click', loadPayroll);
+        document.getElementById('payroll-save')?.addEventListener('click', savePayroll);
+        tbody.addEventListener('input', (e) => recalcPayrollRow(e.target.closest('tr')));
+        tbody.addEventListener('change', (e) => recalcPayrollRow(e.target.closest('tr')));
+    }
+    try {
+        const [staff, sheet] = await Promise.all([api.get('/api/staff'), api.get('/api/payroll/' + period)]);
+        const saved = {}; (sheet.rows || []).forEach(r => { saved[r.staff_id] = r; });
+        const active = staff.filter(s => s.status !== 'inactive');
+        tbody.innerHTML = active.map(s => {
+            const r = saved[s.id] || {};
+            const pt = r.pay_type || s.pay_type || 'month';
+            const rate = r.rate != null ? r.rate : (s.salary || 0);
+            return payrollRowHtml(s.id, s.name, pt, rate, r.qty || 0, r.allowance || 0, r.deduction || 0, r.note || '');
+        }).join('');
+        tbody.querySelectorAll('tr').forEach(recalcPayrollRow);
+        recalcPayrollTotal();
+    } catch (e) { toast(e.message, 'error'); }
+}
+async function savePayroll() {
+    const period = ensurePayrollPeriod();
+    const rows = Array.from(document.querySelectorAll('#payroll-table tbody tr')).map(tr => ({
+        staff_id: tr.dataset.sid,
+        name: tr.children[0].textContent,
+        pay_type: tr.querySelector('.pr-type')?.value || 'month',
+        rate: Number(tr.querySelector('.pr-rate')?.value) || 0,
+        qty: Number(tr.querySelector('.pr-qty')?.value) || 0,
+        allowance: Number(tr.querySelector('.pr-allowance')?.value) || 0,
+        deduction: Number(tr.querySelector('.pr-deduction')?.value) || 0,
+        note: tr.querySelector('.pr-note')?.value || '',
+    }));
+    try { await api.put('/api/payroll/' + period, { rows }); toast('Đã lưu bảng lương ' + period); }
+    catch (e) { toast(e.message, 'error'); }
+}
 
 // ===== USERS PAGE =====
 function roleLabel(slug) {

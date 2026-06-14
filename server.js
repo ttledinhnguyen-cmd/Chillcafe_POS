@@ -183,6 +183,18 @@ try { db.exec(`
         perm TEXT NOT NULL,
         PRIMARY KEY (role, perm)
     );
+    CREATE TABLE IF NOT EXISTS payroll_sheets (
+        period TEXT PRIMARY KEY,
+        data TEXT NOT NULL DEFAULT '[]',
+        updated_at TEXT DEFAULT (datetime('now')),
+        updated_by TEXT
+    );
+    CREATE TABLE IF NOT EXISTS shift_staff (
+        shift_id INTEGER NOT NULL,
+        staff_id TEXT NOT NULL,
+        staff_name TEXT,
+        PRIMARY KEY (shift_id, staff_id)
+    );
 `); } catch (e) { console.warn('DB create tables skipped:', e.message); }
 
 // ===== PERMISSION CATALOG (shared by API + seed) =====
@@ -228,6 +240,7 @@ addColumnSafe('admin_users', 'display_name', 'TEXT');
 addColumnSafe('admin_users', 'role', "TEXT DEFAULT 'admin'");
 addColumnSafe('admin_users', 'google_email', 'TEXT');
 addColumnSafe('staff', 'status', "TEXT DEFAULT 'active'");
+addColumnSafe('staff', 'pay_type', "TEXT DEFAULT 'month'");
 addColumnSafe('inventory', 'cost_price', 'INTEGER DEFAULT 0');
 addColumnSafe('menu', 'sort_order', 'INTEGER DEFAULT 0');
 addColumnSafe('menu', 'image_url', 'TEXT');
@@ -1585,23 +1598,61 @@ app.get('/api/shifts/current', requireAuth, (req, res) => {
 });
 
 app.post('/api/shifts/open', requireAuth, (req, res) => {
-    const { staff_name, open_amount, note } = req.body;
+    const { staff_id, open_amount, note } = req.body;
+    let staff_name = req.body.staff_name;
 
     // Check if there's already an open shift
     const existing = db.prepare("SELECT * FROM shifts WHERE status = 'open'").get();
     if (existing) return res.status(400).json({ error: 'Đã có ca đang mở. Vui lòng đóng ca trước.' });
 
-    if (!validateString(staff_name)) return res.status(400).json({ error: 'Tên nhân viên không hợp lệ' });
+    // Resolve the opener from the staff list (preferred) or accept a free name
+    let sid = null;
+    if (staff_id) {
+        const st = db.prepare('SELECT id, name FROM staff WHERE id = ?').get(staff_id);
+        if (!st) return res.status(400).json({ error: 'Nhân viên không hợp lệ' });
+        sid = st.id; staff_name = st.name;
+    }
+    if (!validateString(staff_name)) return res.status(400).json({ error: 'Vui lòng chọn nhân viên mở ca' });
 
     const code = 'CA' + Date.now().toString(36).toUpperCase();
     const now = new Date().toISOString();
 
-    db.prepare('INSERT INTO shifts (code, staff_name, open_time, open_amount, note, status) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(code, sanitize(staff_name), now, parseInt(open_amount) || 0, sanitize(note || ''), 'open');
+    db.prepare('INSERT INTO shifts (code, staff_name, staff_id, open_time, open_amount, note, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(code, sanitize(staff_name), sid, now, parseInt(open_amount) || 0, sanitize(note || ''), 'open');
+
+    const shift = db.prepare('SELECT * FROM shifts WHERE code = ?').get(code);
+    if (sid) db.prepare('INSERT OR IGNORE INTO shift_staff (shift_id, staff_id, staff_name) VALUES (?, ?, ?)').run(shift.id, sid, staff_name);
 
     auditLog(req.session.userId, 'SHIFT_OPENED', `${code} - ${staff_name}`, req.ip);
-    const shift = db.prepare('SELECT * FROM shifts WHERE code = ?').get(code);
     res.json({ success: true, shift });
+});
+
+// ===== SHIFT ATTENDANCE (điểm danh nhiều nhân viên trong 1 ca) =====
+app.get('/api/shifts/:id/staff', requireAuth, (req, res) => {
+    res.json(db.prepare('SELECT staff_id, staff_name FROM shift_staff WHERE shift_id = ?').all(req.params.id));
+});
+app.post('/api/shifts/:id/staff', requirePerm('shift.manage'), (req, res) => {
+    const shift = db.prepare('SELECT id FROM shifts WHERE id = ?').get(req.params.id);
+    if (!shift) return res.status(404).json({ error: 'Không tìm thấy ca' });
+    const st = db.prepare('SELECT id, name FROM staff WHERE id = ?').get(req.body.staff_id);
+    if (!st) return res.status(400).json({ error: 'Nhân viên không hợp lệ' });
+    db.prepare('INSERT OR IGNORE INTO shift_staff (shift_id, staff_id, staff_name) VALUES (?, ?, ?)').run(shift.id, st.id, st.name);
+    res.json({ success: true });
+});
+app.delete('/api/shifts/:id/staff/:staffId', requirePerm('shift.manage'), (req, res) => {
+    db.prepare('DELETE FROM shift_staff WHERE shift_id = ? AND staff_id = ?').run(req.params.id, req.params.staffId);
+    res.json({ success: true });
+});
+// Admin/quản lý đổi nhân viên mở ca của một ca
+app.put('/api/shifts/:id', requirePerm('shift.manage'), (req, res) => {
+    const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
+    if (!shift) return res.status(404).json({ error: 'Không tìm thấy ca' });
+    const st = db.prepare('SELECT id, name FROM staff WHERE id = ?').get(req.body.staff_id);
+    if (!st) return res.status(400).json({ error: 'Nhân viên không hợp lệ' });
+    db.prepare('UPDATE shifts SET staff_id = ?, staff_name = ? WHERE id = ?').run(st.id, st.name, shift.id);
+    db.prepare('INSERT OR IGNORE INTO shift_staff (shift_id, staff_id, staff_name) VALUES (?, ?, ?)').run(shift.id, st.id, st.name);
+    auditLog(req.session.userId, 'SHIFT_STAFF_UPDATED', `${shift.code} -> ${st.name}`, req.ip);
+    res.json({ success: true });
 });
 
 app.post('/api/shifts/:id/close', requireAuth, (req, res) => {
@@ -1731,23 +1782,24 @@ app.get('/api/staff', requireAuth, (req, res) => {
 });
 
 app.post('/api/staff', requirePerm('staff.edit'), (req, res) => {
-    const { id, name, role, phone, shift, salary, status } = req.body;
+    const { id, name, role, phone, shift, salary, status, pay_type } = req.body;
     if (!validateString(name)) return res.status(400).json({ error: 'Tên nhân viên không hợp lệ' });
     const allowedRoles = ['barista', 'cashier', 'waiter', 'manager', 'kitchen'];
     if (!allowedRoles.includes(role)) return res.status(400).json({ error: 'Vị trí không hợp lệ' });
     const allowedShifts = ['morning', 'afternoon', 'full'];
     if (!allowedShifts.includes(shift)) return res.status(400).json({ error: 'Ca làm không hợp lệ' });
+    const payType = ['hour', 'shift', 'month'].includes(pay_type) ? pay_type : 'month';
 
     if (id) {
         const existing = db.prepare('SELECT id FROM staff WHERE id = ?').get(id);
         if (!existing) return res.status(404).json({ error: 'Không tìm thấy nhân viên' });
-        db.prepare('UPDATE staff SET name = ?, role = ?, phone = ?, shift = ?, salary = ?, status = ? WHERE id = ?')
-            .run(sanitize(name), role, sanitize(phone || ''), shift, parseInt(salary) || 0, status || 'active', id);
+        db.prepare('UPDATE staff SET name = ?, role = ?, phone = ?, shift = ?, salary = ?, status = ?, pay_type = ? WHERE id = ?')
+            .run(sanitize(name), role, sanitize(phone || ''), shift, parseInt(salary) || 0, status || 'active', payType, id);
         auditLog(req.session.userId, 'STAFF_UPDATED', `${name} (${id})`, req.ip);
     } else {
         const newId = uuidv4().slice(0, 8);
-        db.prepare('INSERT INTO staff (id, name, role, phone, shift, salary, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
-            .run(newId, sanitize(name), role, sanitize(phone || ''), shift, parseInt(salary) || 0, 'active');
+        db.prepare('INSERT INTO staff (id, name, role, phone, shift, salary, status, pay_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(newId, sanitize(name), role, sanitize(phone || ''), shift, parseInt(salary) || 0, 'active', payType);
         auditLog(req.session.userId, 'STAFF_CREATED', `${name} (${newId})`, req.ip);
     }
     res.json({ success: true });
@@ -1758,6 +1810,35 @@ app.delete('/api/staff/:id', requirePerm('staff.delete'), (req, res) => {
     if (!staff) return res.status(404).json({ error: 'Không tìm thấy nhân viên' });
     db.prepare('DELETE FROM staff WHERE id = ?').run(req.params.id);
     auditLog(req.session.userId, 'STAFF_DELETED', `${staff.name}`, req.ip);
+    res.json({ success: true });
+});
+
+// ===== PAYROLL (bảng tính lương — nhập tay, lưu theo tháng) =====
+app.get('/api/payroll/:period', requirePerm('staff.view'), (req, res) => {
+    const period = String(req.params.period || '').slice(0, 7);
+    const row = db.prepare('SELECT data, updated_at, updated_by FROM payroll_sheets WHERE period = ?').get(period);
+    let rows = [];
+    try { rows = row ? JSON.parse(row.data) : []; } catch (e) { rows = []; }
+    res.json({ period, rows, updated_at: row?.updated_at || null, updated_by: row?.updated_by || null });
+});
+app.put('/api/payroll/:period', requirePerm('staff.edit'), (req, res) => {
+    const period = String(req.params.period || '').slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(period)) return res.status(400).json({ error: 'Kỳ lương không hợp lệ' });
+    const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+    const clean = rows.map(r => ({
+        staff_id: String(r.staff_id || ''),
+        name: sanitize(String(r.name || '')).slice(0, 100),
+        pay_type: ['hour', 'shift', 'month'].includes(r.pay_type) ? r.pay_type : 'month',
+        rate: Number(r.rate) || 0,
+        qty: Number(r.qty) || 0,
+        allowance: Number(r.allowance) || 0,
+        deduction: Number(r.deduction) || 0,
+        note: sanitize(String(r.note || '')).slice(0, 200),
+    }));
+    db.prepare(`INSERT INTO payroll_sheets (period, data, updated_at, updated_by) VALUES (?, ?, datetime('now'), ?)
+        ON CONFLICT(period) DO UPDATE SET data=excluded.data, updated_at=datetime('now'), updated_by=excluded.updated_by`)
+        .run(period, JSON.stringify(clean), req.session.displayName || req.session.username);
+    auditLog(req.session.userId, 'PAYROLL_SAVED', period, req.ip);
     res.json({ success: true });
 });
 
