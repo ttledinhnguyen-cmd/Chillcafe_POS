@@ -2258,58 +2258,25 @@ window.deleteStaff = async (id) => {
     catch (err) { toast(err.message, 'error'); }
 };
 
-// ===== PAYROLL (bảng tính lương — nhập tay theo tháng) =====
+// ===== PAYROLL + CHẤM CÔNG (theo tháng, nhập tay) =====
 let _payrollWired = false;
+const PR = { period: '', staff: [], state: {} };
+const WD = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+function daysInPeriod(period) { const [y, m] = period.split('-').map(Number); return new Date(y, m, 0).getDate(); }
 function ensurePayrollPeriod() {
     const el = document.getElementById('payroll-period');
     if (!el) return '';
     if (!el.value) { const d = new Date(); el.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
     return el.value;
 }
-function payrollRowHtml(id, name, pt, rate, qty, allowance, deduction, note) {
-    const opts = Object.entries(payTypeLabels).map(([v, l]) => `<option value="${v}" ${v === pt ? 'selected' : ''}>${l}</option>`).join('');
-    const inp = (cls, val) => `<input class="${cls}" type="number" value="${val}" style="width:96px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:13px">`;
-    return `<tr data-sid="${id}">
-        <td>${name}</td>
-        <td><select class="pr-type" style="padding:4px;border:1px solid var(--border);border-radius:4px;font-size:13px">${opts}</select></td>
-        <td>${inp('pr-rate', rate)}</td>
-        <td>${inp('pr-qty', qty)}</td>
-        <td class="pr-base" style="font-weight:600">0d</td>
-        <td>${inp('pr-allowance', allowance)}</td>
-        <td>${inp('pr-deduction', deduction)}</td>
-        <td class="pr-net" style="font-weight:700;color:var(--primary)">0d</td>
-        <td><input class="pr-note" type="text" value="${String(note || '').replace(/"/g, '&quot;')}" style="width:140px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:13px"></td>
-    </tr>`;
-}
-function recalcPayrollRow(tr) {
-    if (!tr || !tr.querySelector) return;
-    const type = tr.querySelector('.pr-type')?.value || 'month';
-    const rate = Number(tr.querySelector('.pr-rate')?.value) || 0;
-    const qty = Number(tr.querySelector('.pr-qty')?.value) || 0;
-    const allowance = Number(tr.querySelector('.pr-allowance')?.value) || 0;
-    const deduction = Number(tr.querySelector('.pr-deduction')?.value) || 0;
-    const base = type === 'month' ? rate : rate * qty;
-    const qtyEl = tr.querySelector('.pr-qty'); if (qtyEl) { qtyEl.disabled = (type === 'month'); qtyEl.style.opacity = type === 'month' ? '.4' : '1'; }
-    const baseEl = tr.querySelector('.pr-base'); if (baseEl) baseEl.textContent = fmt(base);
-    const netEl = tr.querySelector('.pr-net'); if (netEl) netEl.textContent = fmt(base + allowance - deduction);
-    recalcPayrollTotal();
-}
-function recalcPayrollTotal() {
-    let total = 0;
-    document.querySelectorAll('#payroll-table tbody tr').forEach(tr => {
-        const type = tr.querySelector('.pr-type')?.value || 'month';
-        const rate = Number(tr.querySelector('.pr-rate')?.value) || 0;
-        const qty = Number(tr.querySelector('.pr-qty')?.value) || 0;
-        const allowance = Number(tr.querySelector('.pr-allowance')?.value) || 0;
-        const deduction = Number(tr.querySelector('.pr-deduction')?.value) || 0;
-        total += (type === 'month' ? rate : rate * qty) + allowance - deduction;
-    });
-    const el = document.getElementById('payroll-total'); if (el) el.textContent = fmt(total);
-}
+function buoiCount(sid) { return PR.state[sid].m.size + PR.state[sid].a.size; }
+
 async function loadPayroll() {
-    const tbody = document.querySelector('#payroll-table tbody');
-    if (!tbody) return;
+    const tsHead = document.querySelector('#timesheet-table thead');
+    if (!tsHead) return;
     const period = ensurePayrollPeriod();
+    PR.period = period;
     if (!_payrollWired) {
         _payrollWired = true;
         document.getElementById('payroll-period')?.addEventListener('change', loadPayroll);
@@ -2317,41 +2284,140 @@ async function loadPayroll() {
         document.getElementById('payroll-save')?.addEventListener('click', savePayroll);
         document.getElementById('payroll-export')?.addEventListener('click', exportPayrollCSV);
         document.getElementById('payroll-import-btn')?.addEventListener('click', () => document.getElementById('payroll-import-file')?.click());
-        document.getElementById('payroll-import-file')?.addEventListener('change', (e) => {
-            const f = e.target.files[0]; if (!f) return;
-            const rd = new FileReader();
-            rd.onload = () => { importPayrollCSV(String(rd.result)); e.target.value = ''; };
-            rd.readAsText(f);
-        });
-        tbody.addEventListener('input', (e) => recalcPayrollRow(e.target.closest('tr')));
-        tbody.addEventListener('change', (e) => recalcPayrollRow(e.target.closest('tr')));
+        document.getElementById('payroll-import-file')?.addEventListener('change', (e) => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { importPayrollCSV(String(rd.result)); e.target.value = ''; }; rd.readAsText(f); });
+        document.querySelector('#timesheet-table tbody')?.addEventListener('click', (e) => { const c = e.target.closest('.ts-cell'); if (c) toggleTsCell(c); });
+        document.querySelector('#payroll-table tbody')?.addEventListener('input', (e) => onSalaryInput(e.target.closest('tr')));
+        document.querySelector('#payroll-table tbody')?.addEventListener('change', (e) => onSalaryInput(e.target.closest('tr')));
     }
     try {
         const [staff, sheet] = await Promise.all([api.get('/api/staff'), api.get('/api/payroll/' + period)]);
         const saved = {}; (sheet.rows || []).forEach(r => { saved[r.staff_id] = r; });
-        const active = staff.filter(s => s.status !== 'inactive');
-        tbody.innerHTML = active.map(s => {
+        PR.staff = staff.filter(s => s.status !== 'inactive');
+        PR.state = {};
+        PR.staff.forEach(s => {
             const r = saved[s.id] || {};
-            const pt = r.pay_type || s.pay_type || 'month';
-            const rate = r.rate != null ? r.rate : (s.salary || 0);
-            return payrollRowHtml(s.id, s.name, pt, rate, r.qty || 0, r.allowance || 0, r.deduction || 0, r.note || '');
-        }).join('');
-        tbody.querySelectorAll('tr').forEach(recalcPayrollRow);
-        recalcPayrollTotal();
+            PR.state[s.id] = {
+                name: s.name,
+                pay_type: r.pay_type || s.pay_type || 'month',
+                rate: r.rate != null ? r.rate : (s.salary || 0),
+                allowance: r.allowance || 0,
+                deduction: r.deduction || 0,
+                hours: r.hours || 0,
+                note: r.note || '',
+                m: new Set((r.morning || []).map(Number)),
+                a: new Set((r.afternoon || []).map(Number)),
+            };
+        });
+        renderTimesheet();
+        renderSalary();
     } catch (e) { toast(e.message, 'error'); }
 }
+
+function renderTimesheet() {
+    const ndays = daysInPeriod(PR.period);
+    const [y, mo] = PR.period.split('-').map(Number);
+    const head = document.querySelector('#timesheet-table thead');
+    const body = document.querySelector('#timesheet-table tbody');
+    const weekend = {};
+    let h = '<tr><th style="position:sticky;left:0;background:var(--bg);z-index:3;min-width:90px">Nhân viên</th><th style="min-width:54px">Buổi</th>';
+    for (let d = 1; d <= ndays; d++) {
+        const wd = new Date(y, mo - 1, d).getDay();
+        const we = (wd === 0 || wd === 6); if (we) weekend[d] = 1;
+        h += '<th style="text-align:center;min-width:30px;font-size:11px' + (we ? ';background:#e9e9e9' : '') + '">' + d + '<br><span style="font-weight:400;color:var(--text-muted);font-size:10px">' + WD[wd] + '</span></th>';
+    }
+    head.innerHTML = h + '</tr>';
+    const cell = (sid, sess, d) => {
+        const on = PR.state[sid][sess].has(d);
+        const mark = sess === 'm' ? 's' : 'c';
+        const bg = on ? '#ffe680' : (weekend[d] ? '#f3f3f3' : '');
+        return '<td class="ts-cell" data-sid="' + sid + '" data-sess="' + sess + '" data-day="' + d + '" style="text-align:center;cursor:pointer;min-width:30px;font-weight:700;color:' + (on ? '#7a5c00' : 'inherit') + (bg ? ';background:' + bg : '') + '">' + (on ? mark : '') + '</td>';
+    };
+    body.innerHTML = PR.staff.map(s => {
+        let r1 = '<tr><td rowspan="2" style="position:sticky;left:0;background:#fff;z-index:1;font-weight:600;vertical-align:middle">' + s.name + '</td><td>Sáng</td>';
+        for (let d = 1; d <= ndays; d++) r1 += cell(s.id, 'm', d);
+        let r2 = '</tr><tr><td>Chiều</td>';
+        for (let d = 1; d <= ndays; d++) r2 += cell(s.id, 'a', d);
+        return r1 + r2 + '</tr>';
+    }).join('');
+}
+
+function toggleTsCell(cell) {
+    const sid = cell.dataset.sid, sess = cell.dataset.sess, d = Number(cell.dataset.day);
+    const set = PR.state[sid][sess];
+    const [y, mo] = PR.period.split('-').map(Number);
+    const wd = new Date(y, mo - 1, d).getDay(); const we = (wd === 0 || wd === 6);
+    if (set.has(d)) { set.delete(d); cell.textContent = ''; cell.style.background = we ? '#f3f3f3' : ''; cell.style.color = 'inherit'; }
+    else { set.add(d); cell.textContent = (sess === 'm' ? 's' : 'c'); cell.style.background = '#ffe680'; cell.style.color = '#7a5c00'; }
+    updateSalaryRow(sid);
+}
+
+function renderSalary() {
+    const tbody = document.querySelector('#payroll-table tbody');
+    tbody.innerHTML = PR.staff.map(s => {
+        const st = PR.state[s.id];
+        const opts = Object.entries(payTypeLabels).map(([v, l]) => '<option value="' + v + '"' + (v === st.pay_type ? ' selected' : '') + '>' + l + '</option>').join('');
+        const inp = (cls, val, w) => '<input class="' + cls + '" type="number" value="' + val + '" style="width:' + (w || 90) + 'px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:13px">';
+        return '<tr data-sid="' + s.id + '">' +
+            '<td>' + s.name + '</td>' +
+            '<td><select class="pr-type" style="padding:4px;border:1px solid var(--border);border-radius:4px;font-size:13px">' + opts + '</select></td>' +
+            '<td>' + inp('pr-rate', st.rate) + '</td>' +
+            '<td class="pr-buoi" style="font-weight:600;text-align:center">' + buoiCount(s.id) + '</td>' +
+            '<td>' + inp('pr-hours', st.hours, 70) + '</td>' +
+            '<td class="pr-base" style="font-weight:600">0d</td>' +
+            '<td>' + inp('pr-allowance', st.allowance) + '</td>' +
+            '<td>' + inp('pr-deduction', st.deduction) + '</td>' +
+            '<td class="pr-net" style="font-weight:700;color:var(--primary)">0d</td>' +
+            '<td><input class="pr-note" type="text" value="' + String(st.note || '').replace(/"/g, '&quot;') + '" style="width:130px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:13px"></td>' +
+            '</tr>';
+    }).join('');
+    document.querySelectorAll('#payroll-table tbody tr').forEach(updateSalaryRowEl);
+    recalcPayrollTotal();
+}
+
+function onSalaryInput(tr) {
+    if (!tr) return;
+    const st = PR.state[tr.dataset.sid]; if (!st) return;
+    st.pay_type = tr.querySelector('.pr-type').value;
+    st.rate = Number(tr.querySelector('.pr-rate').value) || 0;
+    st.hours = Number(tr.querySelector('.pr-hours').value) || 0;
+    st.allowance = Number(tr.querySelector('.pr-allowance').value) || 0;
+    st.deduction = Number(tr.querySelector('.pr-deduction').value) || 0;
+    st.note = tr.querySelector('.pr-note').value || '';
+    updateSalaryRowEl(tr);
+    recalcPayrollTotal();
+}
+function salaryBaseNet(sid) {
+    const st = PR.state[sid];
+    let base = st.pay_type === 'month' ? st.rate : (st.pay_type === 'hour' ? st.rate * st.hours : st.rate * buoiCount(sid));
+    return { base, net: base + st.allowance - st.deduction };
+}
+function updateSalaryRowEl(tr) {
+    const sid = tr.dataset.sid, st = PR.state[sid]; if (!st) return;
+    const { base, net } = salaryBaseNet(sid);
+    const hEl = tr.querySelector('.pr-hours'); if (hEl) { const dis = st.pay_type !== 'hour'; hEl.disabled = dis; hEl.style.opacity = dis ? '.4' : '1'; }
+    const bEl = tr.querySelector('.pr-buoi'); if (bEl) bEl.textContent = buoiCount(sid);
+    tr.querySelector('.pr-base').textContent = fmt(base);
+    tr.querySelector('.pr-net').textContent = fmt(net);
+}
+function updateSalaryRow(sid) {
+    const tr = document.querySelector('#payroll-table tbody tr[data-sid="' + sid + '"]');
+    if (tr) { updateSalaryRowEl(tr); recalcPayrollTotal(); }
+}
+function recalcPayrollTotal() {
+    let total = 0; PR.staff.forEach(s => { total += salaryBaseNet(s.id).net; });
+    const el = document.getElementById('payroll-total'); if (el) el.textContent = fmt(total);
+}
+
 async function savePayroll() {
     const period = ensurePayrollPeriod();
-    const rows = Array.from(document.querySelectorAll('#payroll-table tbody tr')).map(tr => ({
-        staff_id: tr.dataset.sid,
-        name: tr.children[0].textContent,
-        pay_type: tr.querySelector('.pr-type')?.value || 'month',
-        rate: Number(tr.querySelector('.pr-rate')?.value) || 0,
-        qty: Number(tr.querySelector('.pr-qty')?.value) || 0,
-        allowance: Number(tr.querySelector('.pr-allowance')?.value) || 0,
-        deduction: Number(tr.querySelector('.pr-deduction')?.value) || 0,
-        note: tr.querySelector('.pr-note')?.value || '',
-    }));
+    const rows = PR.staff.map(s => {
+        const st = PR.state[s.id];
+        return {
+            staff_id: s.id, name: st.name, pay_type: st.pay_type, rate: st.rate,
+            qty: buoiCount(s.id), hours: st.hours, allowance: st.allowance, deduction: st.deduction, note: st.note,
+            morning: [...st.m].sort((a, b) => a - b), afternoon: [...st.a].sort((a, b) => a - b),
+        };
+    });
     try { await api.put('/api/payroll/' + period, { rows }); toast('Đã lưu bảng lương ' + period); }
     catch (e) { toast(e.message, 'error'); }
 }
@@ -2360,25 +2426,18 @@ async function savePayroll() {
 function csvEscape(v) { v = String(v == null ? '' : v); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
 function exportPayrollCSV() {
     const period = ensurePayrollPeriod();
-    const headers = ['Nhân viên', 'Hình thức', 'Đơn giá', 'Số lượng', 'Lương cơ bản', 'Phụ cấp', 'Khấu trừ', 'Thực lãnh', 'Ghi chú'];
+    const headers = ['Nhân viên', 'Hình thức', 'Đơn giá', 'Số buổi', 'Số giờ', 'Lương cơ bản', 'Phụ cấp', 'Khấu trừ', 'Thực lãnh', 'Ghi chú'];
     const lines = [headers.map(csvEscape).join(',')];
-    document.querySelectorAll('#payroll-table tbody tr').forEach(tr => {
-        const type = tr.querySelector('.pr-type').value;
-        const rate = Number(tr.querySelector('.pr-rate').value) || 0;
-        const qty = Number(tr.querySelector('.pr-qty').value) || 0;
-        const allowance = Number(tr.querySelector('.pr-allowance').value) || 0;
-        const deduction = Number(tr.querySelector('.pr-deduction').value) || 0;
-        const base = type === 'month' ? rate : rate * qty;
-        lines.push([tr.children[0].textContent, payTypeLabels[type], rate, type === 'month' ? '' : qty, base, allowance, deduction, base + allowance - deduction, tr.querySelector('.pr-note').value || ''].map(csvEscape).join(','));
+    PR.staff.forEach(s => {
+        const st = PR.state[s.id], { base, net } = salaryBaseNet(s.id);
+        lines.push([st.name, payTypeLabels[st.pay_type], st.rate, buoiCount(s.id), st.pay_type === 'hour' ? st.hours : '', base, st.allowance, st.deduction, net, st.note].map(csvEscape).join(','));
     });
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'bang-luong-' + period + '.csv';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'bang-luong-' + period + '.csv';
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 function parseCSV(text) {
-    text = text.replace(/^﻿/, '');
-    const rows = []; let row = [], cur = '', q = false;
+    text = text.replace(/^﻿/, ''); const rows = []; let row = [], cur = '', q = false;
     for (let i = 0; i < text.length; i++) {
         const c = text[i];
         if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
@@ -2395,27 +2454,25 @@ function importPayrollCSV(text) {
     if (rows.length < 2) { toast('Tệp trống hoặc sai định dạng', 'error'); return; }
     const header = rows[0].map(h => h.trim().toLowerCase());
     const idx = (n) => header.findIndex(h => h.includes(n));
-    const iName = idx('nhân viên') >= 0 ? idx('nhân viên') : 0;
-    const iType = idx('hình thức'), iRate = idx('đơn giá'), iQty = idx('số lượng'), iAll = idx('phụ cấp'), iDed = idx('khấu trừ'), iNote = idx('ghi chú');
+    const iName = idx('nhân viên') >= 0 ? idx('nhân viên') : 0, iType = idx('hình thức'), iRate = idx('đơn giá'), iHours = idx('số giờ'), iAll = idx('phụ cấp'), iDed = idx('khấu trừ'), iNote = idx('ghi chú');
     const labelToType = {}; Object.entries(payTypeLabels).forEach(([v, l]) => { labelToType[l.toLowerCase()] = v; });
     const num = (s) => Number(String(s == null ? '' : s).replace(/[^0-9.\-]/g, '')) || 0;
-    const trByName = {}; document.querySelectorAll('#payroll-table tbody tr').forEach(tr => { trByName[tr.children[0].textContent.trim().toLowerCase()] = tr; });
+    const byName = {}; PR.staff.forEach(s => { byName[s.name.trim().toLowerCase()] = s.id; });
     let matched = 0;
     for (let r = 1; r < rows.length; r++) {
         const cells = rows[r]; if (!cells) continue;
         const nm = (cells[iName] || '').trim().toLowerCase(); if (!nm) continue;
-        const tr = trByName[nm]; if (!tr) continue;
-        matched++;
-        if (iType >= 0 && cells[iType]) { const t = labelToType[cells[iType].trim().toLowerCase()]; if (t) tr.querySelector('.pr-type').value = t; }
-        if (iRate >= 0) tr.querySelector('.pr-rate').value = num(cells[iRate]);
-        if (iQty >= 0) tr.querySelector('.pr-qty').value = num(cells[iQty]);
-        if (iAll >= 0) tr.querySelector('.pr-allowance').value = num(cells[iAll]);
-        if (iDed >= 0) tr.querySelector('.pr-deduction').value = num(cells[iDed]);
-        if (iNote >= 0 && cells[iNote] != null) tr.querySelector('.pr-note').value = cells[iNote];
-        recalcPayrollRow(tr);
+        const sid = byName[nm]; if (!sid) continue; matched++;
+        const st = PR.state[sid];
+        if (iType >= 0 && cells[iType]) { const t = labelToType[cells[iType].trim().toLowerCase()]; if (t) st.pay_type = t; }
+        if (iRate >= 0) st.rate = num(cells[iRate]);
+        if (iHours >= 0) st.hours = num(cells[iHours]);
+        if (iAll >= 0) st.allowance = num(cells[iAll]);
+        if (iDed >= 0) st.deduction = num(cells[iDed]);
+        if (iNote >= 0 && cells[iNote] != null) st.note = cells[iNote];
     }
-    recalcPayrollTotal();
-    toast(matched ? ('Đã nhập ' + matched + ' dòng — kiểm tra rồi bấm "Lưu bảng lương"') : 'Không khớp nhân viên nào (đối chiếu theo cột Nhân viên)', matched ? 'success' : 'error');
+    renderSalary();
+    toast(matched ? ('Đã nhập ' + matched + ' dòng — kiểm tra rồi bấm "Lưu bảng lương"') : 'Không khớp nhân viên nào (đối chiếu cột Nhân viên)', matched ? 'success' : 'error');
 }
 
 // ===== USERS PAGE =====

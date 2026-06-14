@@ -1827,15 +1827,19 @@ app.put('/api/payroll/:period', requirePerm('payroll.edit'), (req, res) => {
     const period = String(req.params.period || '').slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(period)) return res.status(400).json({ error: 'Kỳ lương không hợp lệ' });
     const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+    const days = (arr) => Array.isArray(arr) ? [...new Set(arr.map(Number).filter(d => Number.isInteger(d) && d >= 1 && d <= 31))].sort((a, b) => a - b) : [];
     const clean = rows.map(r => ({
         staff_id: String(r.staff_id || ''),
         name: sanitize(String(r.name || '')).slice(0, 100),
         pay_type: ['hour', 'shift', 'month'].includes(r.pay_type) ? r.pay_type : 'month',
         rate: Number(r.rate) || 0,
         qty: Number(r.qty) || 0,
+        hours: Number(r.hours) || 0,
         allowance: Number(r.allowance) || 0,
         deduction: Number(r.deduction) || 0,
         note: sanitize(String(r.note || '')).slice(0, 200),
+        morning: days(r.morning),
+        afternoon: days(r.afternoon),
     }));
     db.prepare(`INSERT INTO payroll_sheets (period, data, updated_at, updated_by) VALUES (?, ?, datetime('now'), ?)
         ON CONFLICT(period) DO UPDATE SET data=excluded.data, updated_at=datetime('now'), updated_by=excluded.updated_by`)
