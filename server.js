@@ -208,11 +208,12 @@ const PERMISSION_CATALOG = [
     { group: 'Thu chi', perms: [{ key: 'transaction.view', label: 'Xem thu chi' }, { key: 'transaction.edit', label: 'Thêm/sửa thu chi' }, { key: 'transaction.delete', label: 'Xóa thu chi' }] },
     { group: 'Kho hàng', perms: [{ key: 'inventory.view', label: 'Xem kho' }, { key: 'inventory.edit', label: 'Thêm/sửa kho' }, { key: 'inventory.delete', label: 'Xóa kho' }] },
     { group: 'Nhân viên', perms: [{ key: 'staff.view', label: 'Xem nhân viên' }, { key: 'staff.edit', label: 'Thêm/sửa nhân viên' }, { key: 'staff.delete', label: 'Xóa nhân viên' }] },
+    { group: 'Bảng lương', perms: [{ key: 'payroll.view', label: 'Xem bảng lương' }, { key: 'payroll.edit', label: 'Sửa/lưu bảng lương' }] },
     { group: 'Báo cáo', perms: [{ key: 'report.view', label: 'Xem báo cáo' }] },
 ];
 const ALL_PERMS = PERMISSION_CATALOG.flatMap(g => g.perms.map(p => p.key));
 const DEFAULT_ROLE_PERMS = {
-    manager: ['dashboard.view','pos.use','table.view','table.manage','order.view','order.edit','order.delete','menu.view','menu.edit','menu.delete','shift.view','shift.manage','transaction.view','transaction.edit','transaction.delete','inventory.view','inventory.edit','inventory.delete','staff.view','staff.edit','staff.delete','report.view'],
+    manager: ['dashboard.view','pos.use','table.view','table.manage','order.view','order.edit','order.delete','menu.view','menu.edit','menu.delete','shift.view','shift.manage','transaction.view','transaction.edit','transaction.delete','inventory.view','inventory.edit','inventory.delete','staff.view','staff.edit','staff.delete','payroll.view','payroll.edit','report.view'],
     cashier: ['dashboard.view','pos.use','table.view','order.view','menu.view','shift.view'],
     staff: ['dashboard.view','pos.use','table.view','order.view','menu.view'],
 };
@@ -257,6 +258,8 @@ try {
     for (const [role, perms] of Object.entries(DEFAULT_ROLE_PERMS)) {
         if (hasPerm.get(role).c === 0) perms.forEach(p => insPerm.run(role, p));
     }
+    // New permissions added later: grant to 'manager' by default (admin can adjust)
+    ['payroll.view', 'payroll.edit'].forEach(p => insPerm.run('manager', p));
 } catch (e) { console.warn('Seed roles skipped:', e.message); }
 
 // Insert default settings if empty
@@ -1784,8 +1787,7 @@ app.get('/api/staff', requireAuth, (req, res) => {
 app.post('/api/staff', requirePerm('staff.edit'), (req, res) => {
     const { id, name, role, phone, shift, salary, status, pay_type } = req.body;
     if (!validateString(name)) return res.status(400).json({ error: 'Tên nhân viên không hợp lệ' });
-    const allowedRoles = ['barista', 'cashier', 'waiter', 'manager', 'kitchen'];
-    if (!allowedRoles.includes(role)) return res.status(400).json({ error: 'Vị trí không hợp lệ' });
+    if (!isValidRole(role)) return res.status(400).json({ error: 'Vị trí không hợp lệ' });
     const allowedShifts = ['morning', 'afternoon', 'full'];
     if (!allowedShifts.includes(shift)) return res.status(400).json({ error: 'Ca làm không hợp lệ' });
     const payType = ['hour', 'shift', 'month'].includes(pay_type) ? pay_type : 'month';
@@ -1814,14 +1816,14 @@ app.delete('/api/staff/:id', requirePerm('staff.delete'), (req, res) => {
 });
 
 // ===== PAYROLL (bảng tính lương — nhập tay, lưu theo tháng) =====
-app.get('/api/payroll/:period', requirePerm('staff.view'), (req, res) => {
+app.get('/api/payroll/:period', requirePerm('payroll.view'), (req, res) => {
     const period = String(req.params.period || '').slice(0, 7);
     const row = db.prepare('SELECT data, updated_at, updated_by FROM payroll_sheets WHERE period = ?').get(period);
     let rows = [];
     try { rows = row ? JSON.parse(row.data) : []; } catch (e) { rows = []; }
     res.json({ period, rows, updated_at: row?.updated_at || null, updated_by: row?.updated_by || null });
 });
-app.put('/api/payroll/:period', requirePerm('staff.edit'), (req, res) => {
+app.put('/api/payroll/:period', requirePerm('payroll.edit'), (req, res) => {
     const period = String(req.params.period || '').slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(period)) return res.status(400).json({ error: 'Kỳ lương không hợp lệ' });
     const rows = Array.isArray(req.body.rows) ? req.body.rows : [];

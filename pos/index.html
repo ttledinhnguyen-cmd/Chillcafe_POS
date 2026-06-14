@@ -23,6 +23,19 @@
         .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         .grid-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
     }
+    @media (max-width: 768px) {
+        /* Bảng lương: giữ dạng bảng (cuộn ngang) để có tiêu đề cột, không vỡ thành thẻ */
+        #payroll-table { display: table !important; min-width: 720px; background: #fff; box-shadow: none; }
+        #payroll-table thead { display: table-header-group !important; }
+        #payroll-table tbody { display: table-row-group !important; }
+        #payroll-table tfoot { display: table-footer-group !important; }
+        #payroll-table tr { display: table-row !important; background: none !important; border: none !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; border-radius: 0 !important; }
+        #payroll-table th, #payroll-table td { display: table-cell !important; border: none !important; border-bottom: 1px solid var(--border) !important; padding: 8px 6px !important; font-size: 12px !important; text-align: left !important; white-space: nowrap; }
+        #payroll-table td:first-child { font-weight: 600; }
+        #payroll-table input, #payroll-table select { width: 88px !important; font-size: 12px !important; }
+        #payroll-table .pr-note { width: 120px !important; }
+        .payroll-actions { width: 100%; flex-wrap: wrap; }
+    }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -80,6 +93,7 @@
                 <li data-page="transactions" data-role="admin,manager"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg></span> Thu chi</li>
                 <li data-page="inventory" data-role="admin,manager"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span> Kho hàng</li>
                 <li data-page="staff" data-role="admin,manager"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Nhân viên</li>
+                <li data-page="payroll" data-role="admin,manager"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg></span> Bảng lương</li>
                 <li data-page="reports" data-role="admin,manager"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></span> Báo cáo</li>
                 <li data-page="users" data-role="admin,manager"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg></span> Tài khoản</li>
                 <li data-page="settings" data-role="admin"><span class="icon"><svg class="ico" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span> Cài đặt</li>
@@ -290,16 +304,22 @@
                     <tbody></tbody>
                 </table>
 
-                <!-- Bảng tính lương (nhập tay, lưu theo tháng) -->
-                <div class="card" id="payroll-card" style="margin-top:24px">
-                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-                        <h3 style="margin:0">Bảng tính lương</h3>
-                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                            <input type="month" id="payroll-period" class="input-sm">
-                            <button class="btn" id="payroll-reload">Tải lại</button>
-                            <button class="btn btn-primary" id="payroll-save" data-perm="staff.edit">Lưu bảng lương</button>
-                        </div>
+            </div>
+
+            <!-- PAGE: BẢNG TÍNH LƯƠNG -->
+            <div class="page" id="page-payroll">
+                <div class="page-header">
+                    <h3>Bảng tính lương</h3>
+                    <div class="payroll-actions" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <input type="month" id="payroll-period" class="input-sm">
+                        <button class="btn" id="payroll-reload">Tải lại</button>
+                        <button class="btn" id="payroll-export">Xuất Excel</button>
+                        <button class="btn" id="payroll-import-btn" data-perm="payroll.edit">Nhập Excel</button>
+                        <input type="file" id="payroll-import-file" accept=".csv,text/csv" style="display:none">
+                        <button class="btn btn-primary" id="payroll-save" data-perm="payroll.edit">Lưu bảng lương</button>
                     </div>
+                </div>
+                <div class="card">
                     <div style="overflow-x:auto">
                         <table class="data-table" id="payroll-table">
                             <thead><tr>
@@ -313,7 +333,7 @@
                             </tr></tfoot>
                         </table>
                     </div>
-                    <p style="font-size:12px;color:var(--text-muted);margin-top:8px">Bảng nhập tay: sửa trực tiếp các ô. "Số lượng" = số giờ hoặc số buổi (theo tháng thì bỏ qua). Lương cơ bản = Đơn giá × Số lượng. Thực lãnh = Lương cơ bản + Phụ cấp − Khấu trừ. Nhớ bấm "Lưu bảng lương".</p>
+                    <p style="font-size:12px;color:var(--text-muted);margin-top:8px">Bảng nhập tay: sửa trực tiếp các ô. "Số lượng" = số giờ hoặc số buổi (theo tháng thì bỏ qua). Lương cơ bản = Đơn giá × Số lượng. Thực lãnh = Lương cơ bản + Phụ cấp − Khấu trừ. Nhớ bấm "Lưu bảng lương". Xuất/Nhập dùng tệp CSV (mở &amp; lưu bằng Excel được).</p>
                 </div>
             </div>
 
@@ -641,6 +661,6 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-    <script src="/pos/script.js?v=61"></script>
+    <script src="/pos/script.js?v=62"></script>
 </body>
 </html>

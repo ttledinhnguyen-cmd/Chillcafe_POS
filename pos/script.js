@@ -28,7 +28,7 @@ const App = {
 // Legacy role permissions used only when the server doesn't send a permission
 // list yet (e.g. backend not restarted) so the UI doesn't break in the meantime.
 const LEGACY_ROLE_PERMS = {
-    manager: ['dashboard.view','pos.use','table.view','table.manage','order.view','order.edit','order.delete','menu.view','menu.edit','menu.delete','shift.view','shift.manage','transaction.view','transaction.edit','transaction.delete','inventory.view','inventory.edit','inventory.delete','staff.view','staff.edit','staff.delete','report.view'],
+    manager: ['dashboard.view','pos.use','table.view','table.manage','order.view','order.edit','order.delete','menu.view','menu.edit','menu.delete','shift.view','shift.manage','transaction.view','transaction.edit','transaction.delete','inventory.view','inventory.edit','inventory.delete','staff.view','staff.edit','staff.delete','payroll.view','payroll.edit','report.view'],
     cashier: ['dashboard.view','pos.use','table.view','order.view','menu.view','shift.view'],
     staff: ['dashboard.view','pos.use','table.view','order.view','menu.view'],
 };
@@ -381,6 +381,7 @@ const NAV_PERM = {
     transactions: 'transaction.view',
     inventory: 'inventory.view',
     staff: 'staff.view',
+    payroll: 'payroll.view',
     reports: 'report.view',
     users: '__admin__',
     settings: '__admin__',
@@ -507,6 +508,7 @@ function navigate(page) {
         dashboard: 'Tổng quan', pos: 'Bán hàng (POS)', tables: 'Quản lý bàn',
         orders: 'Đơn hàng', menu: 'Thực đơn', shifts: 'Ca làm việc',
         transactions: 'Thu chi', inventory: 'Kho hàng', staff: 'Nhân viên',
+        payroll: 'Bảng tính lương',
         reports: 'Báo cáo', users: 'Quản lý tài khoản', settings: 'Cài đặt'
     };
     $('#page-title').textContent = titles[page] || page;
@@ -521,7 +523,7 @@ function navigate(page) {
         dashboard: loadDashboard, pos: loadPOS, tables: loadTables,
         orders: loadOrders, menu: loadMenu, shifts: loadShifts,
         transactions: loadTransactions, inventory: loadInventory,
-        staff: loadStaff, reports: loadReports, users: loadUsers,
+        staff: loadStaff, payroll: loadPayroll, reports: loadReports, users: loadUsers,
         settings: loadSettings
     };
     if (loaders[page]) loaders[page]();
@@ -2030,7 +2032,7 @@ window.editShiftStaff = async function(shiftId, openerId) {
             + active.map(s => `<option value="${s.id}" ${s.id === openerId ? 'selected' : ''}>${s.name}</option>`).join('')
             + '</select></div>';
         html += '<div style="font-size:13px;color:var(--text-muted);margin-bottom:6px">Điểm danh nhân viên làm trong ca này:</div>';
-        html += active.map(s => `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;cursor:pointer"><input type="checkbox" class="att-cb" data-sid="${s.id}" ${attIds.has(s.id) ? 'checked' : ''}> ${s.name} <span style="color:var(--text-muted);font-size:12px">(${roleLabels[s.role] || s.role})</span></label>`).join('');
+        html += active.map(s => `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;cursor:pointer"><input type="checkbox" class="att-cb" data-sid="${s.id}" ${attIds.has(s.id) ? 'checked' : ''}> ${s.name} <span style="color:var(--text-muted);font-size:12px">(${roleLabel(s.role)})</span></label>`).join('');
         html += '</div>';
         showTableOpModal('Nhân viên trong ca', html);
         const body = document.querySelector('#modal-payment .modal-body');
@@ -2198,11 +2200,13 @@ window.deleteInv = async (id) => {
 // ===== STAFF PAGE =====
 async function loadStaff() {
     try {
+        // Roles cache → "Vị trí" dùng vai trò của hệ thống tài khoản
+        try { App.rolesCache = await api.get('/api/roles'); } catch (e) {}
         const staff = await api.get('/api/staff');
         const tbody = $('#staff-table tbody');
-        tbody.innerHTML = !staff.length ? `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px">Chưa có nhân viên nào. Bấm "Thêm nhân viên" để tạo hồ sơ đầu tiên.</td></tr>` : staff.map(s => `<tr>
+        tbody.innerHTML = !staff.length ? `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px">Chưa có nhân viên nào. Bấm "Thêm" để tạo hồ sơ đầu tiên.</td></tr>` : staff.map(s => `<tr>
             <td>${s.name}</td>
-            <td>${roleLabels[s.role] || s.role}</td>
+            <td>${roleLabel(s.role)}</td>
             <td>${s.phone || '-'}</td>
             <td>${shiftLabels[s.shift] || s.shift}</td>
             <td>${payTypeLabels[s.pay_type || 'month']} · ${fmt(s.salary)}${s.pay_type && s.pay_type !== 'month' ? '/' + payTypeUnit[s.pay_type] : ''}</td>
@@ -2211,14 +2215,13 @@ async function loadStaff() {
                 <button class="btn btn-sm btn-danger" onclick="deleteStaff('${s.id}')">Xóa</button>
             </td>
         </tr>`).join('');
-        loadPayroll();
     } catch (err) { toast(err.message, 'error'); }
 }
 
 $('#add-staff-btn').addEventListener('click', () => {
     showFormModal('Thêm nhân viên', [
         { key: 'name', label: 'Họ tên', type: 'text', required: true },
-        { key: 'role', label: 'Vị trí', type: 'select', options: Object.entries(roleLabels) },
+        { key: 'role', label: 'Vị trí (vai trò)', type: 'select', options: roleOptions() },
         { key: 'phone', label: 'SĐT', type: 'text' },
         { key: 'shift', label: 'Ca', type: 'select', options: Object.entries(shiftLabels) },
         { key: 'pay_type', label: 'Hình thức trả', type: 'select', options: Object.entries(payTypeLabels) },
@@ -2236,7 +2239,7 @@ window.editStaff = async (id) => {
     if (!s) return;
     showFormModal('Sửa nhân viên', [
         { key: 'name', label: 'Họ tên', type: 'text', value: s.name, required: true },
-        { key: 'role', label: 'Vị trí', type: 'select', value: s.role, options: Object.entries(roleLabels) },
+        { key: 'role', label: 'Vị trí (vai trò)', type: 'select', value: s.role, options: roleOptions() },
         { key: 'phone', label: 'SĐT', type: 'text', value: s.phone },
         { key: 'shift', label: 'Ca', type: 'select', value: s.shift, options: Object.entries(shiftLabels) },
         { key: 'pay_type', label: 'Hình thức trả', type: 'select', value: s.pay_type || 'month', options: Object.entries(payTypeLabels) },
@@ -2312,6 +2315,14 @@ async function loadPayroll() {
         document.getElementById('payroll-period')?.addEventListener('change', loadPayroll);
         document.getElementById('payroll-reload')?.addEventListener('click', loadPayroll);
         document.getElementById('payroll-save')?.addEventListener('click', savePayroll);
+        document.getElementById('payroll-export')?.addEventListener('click', exportPayrollCSV);
+        document.getElementById('payroll-import-btn')?.addEventListener('click', () => document.getElementById('payroll-import-file')?.click());
+        document.getElementById('payroll-import-file')?.addEventListener('change', (e) => {
+            const f = e.target.files[0]; if (!f) return;
+            const rd = new FileReader();
+            rd.onload = () => { importPayrollCSV(String(rd.result)); e.target.value = ''; };
+            rd.readAsText(f);
+        });
         tbody.addEventListener('input', (e) => recalcPayrollRow(e.target.closest('tr')));
         tbody.addEventListener('change', (e) => recalcPayrollRow(e.target.closest('tr')));
     }
@@ -2343,6 +2354,68 @@ async function savePayroll() {
     }));
     try { await api.put('/api/payroll/' + period, { rows }); toast('Đã lưu bảng lương ' + period); }
     catch (e) { toast(e.message, 'error'); }
+}
+
+// ===== Xuất/Nhập bảng lương qua CSV (Excel mở được) =====
+function csvEscape(v) { v = String(v == null ? '' : v); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+function exportPayrollCSV() {
+    const period = ensurePayrollPeriod();
+    const headers = ['Nhân viên', 'Hình thức', 'Đơn giá', 'Số lượng', 'Lương cơ bản', 'Phụ cấp', 'Khấu trừ', 'Thực lãnh', 'Ghi chú'];
+    const lines = [headers.map(csvEscape).join(',')];
+    document.querySelectorAll('#payroll-table tbody tr').forEach(tr => {
+        const type = tr.querySelector('.pr-type').value;
+        const rate = Number(tr.querySelector('.pr-rate').value) || 0;
+        const qty = Number(tr.querySelector('.pr-qty').value) || 0;
+        const allowance = Number(tr.querySelector('.pr-allowance').value) || 0;
+        const deduction = Number(tr.querySelector('.pr-deduction').value) || 0;
+        const base = type === 'month' ? rate : rate * qty;
+        lines.push([tr.children[0].textContent, payTypeLabels[type], rate, type === 'month' ? '' : qty, base, allowance, deduction, base + allowance - deduction, tr.querySelector('.pr-note').value || ''].map(csvEscape).join(','));
+    });
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'bang-luong-' + period + '.csv';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function parseCSV(text) {
+    text = text.replace(/^﻿/, '');
+    const rows = []; let row = [], cur = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+        else if (c === '"') q = true;
+        else if (c === ',') { row.push(cur); cur = ''; }
+        else if (c === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+        else if (c !== '\r') cur += c;
+    }
+    if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+    return rows;
+}
+function importPayrollCSV(text) {
+    const rows = parseCSV(text);
+    if (rows.length < 2) { toast('Tệp trống hoặc sai định dạng', 'error'); return; }
+    const header = rows[0].map(h => h.trim().toLowerCase());
+    const idx = (n) => header.findIndex(h => h.includes(n));
+    const iName = idx('nhân viên') >= 0 ? idx('nhân viên') : 0;
+    const iType = idx('hình thức'), iRate = idx('đơn giá'), iQty = idx('số lượng'), iAll = idx('phụ cấp'), iDed = idx('khấu trừ'), iNote = idx('ghi chú');
+    const labelToType = {}; Object.entries(payTypeLabels).forEach(([v, l]) => { labelToType[l.toLowerCase()] = v; });
+    const num = (s) => Number(String(s == null ? '' : s).replace(/[^0-9.\-]/g, '')) || 0;
+    const trByName = {}; document.querySelectorAll('#payroll-table tbody tr').forEach(tr => { trByName[tr.children[0].textContent.trim().toLowerCase()] = tr; });
+    let matched = 0;
+    for (let r = 1; r < rows.length; r++) {
+        const cells = rows[r]; if (!cells) continue;
+        const nm = (cells[iName] || '').trim().toLowerCase(); if (!nm) continue;
+        const tr = trByName[nm]; if (!tr) continue;
+        matched++;
+        if (iType >= 0 && cells[iType]) { const t = labelToType[cells[iType].trim().toLowerCase()]; if (t) tr.querySelector('.pr-type').value = t; }
+        if (iRate >= 0) tr.querySelector('.pr-rate').value = num(cells[iRate]);
+        if (iQty >= 0) tr.querySelector('.pr-qty').value = num(cells[iQty]);
+        if (iAll >= 0) tr.querySelector('.pr-allowance').value = num(cells[iAll]);
+        if (iDed >= 0) tr.querySelector('.pr-deduction').value = num(cells[iDed]);
+        if (iNote >= 0 && cells[iNote] != null) tr.querySelector('.pr-note').value = cells[iNote];
+        recalcPayrollRow(tr);
+    }
+    recalcPayrollTotal();
+    toast(matched ? ('Đã nhập ' + matched + ' dòng — kiểm tra rồi bấm "Lưu bảng lương"') : 'Không khớp nhân viên nào (đối chiếu theo cột Nhân viên)', matched ? 'success' : 'error');
 }
 
 // ===== USERS PAGE =====
