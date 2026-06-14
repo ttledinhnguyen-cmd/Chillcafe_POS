@@ -2301,13 +2301,16 @@ function renderPermissionManager() {
     let html = '<div style="max-height:70vh;overflow:auto;padding:2px">';
     html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button class="btn btn-primary btn-sm" onclick="addRolePrompt()">+ Thêm vai trò</button></div>';
     roles.forEach(r => {
-        html += `<div class="perm-role-card" data-role="${r.slug}" style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px">`;
-        html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap">`;
-        html += `<b>${r.name}</b>`;
-        html += `<span style="display:flex;gap:6px;align-items:center"><span style="font-size:11px;color:var(--text-muted)">${r.user_count} tài khoản${r.is_system ? ' · hệ thống' : ''}</span>`;
+        html += `<div class="perm-role-card" data-role="${r.slug}" style="border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden">`;
+        html += `<div class="perm-role-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px;flex-wrap:wrap">`;
+        html += `<div onclick="togglePermRole('${r.slug}')" style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:0">`;
+        html += `<span class="perm-caret" style="display:inline-block;transition:transform .15s;color:var(--text-muted)">▸</span><b>${r.name}</b>`;
+        html += `<span style="font-size:11px;color:var(--text-muted)">${r.user_count} tài khoản${r.is_system ? ' · hệ thống' : ''}</span></div>`;
+        html += `<span style="display:flex;gap:6px;align-items:center">`;
         if (!r.is_admin) html += `<button class="btn btn-sm btn-primary" onclick="saveRolePerms('${r.slug}')">Lưu</button>`;
         if (!r.is_system) html += `<button class="btn btn-sm btn-danger" onclick="deleteRoleConfirm('${r.slug}','${r.name.replace(/'/g, "\\'")}')">Xóa</button>`;
         html += `</span></div>`;
+        html += `<div class="perm-role-body" style="display:none;padding:0 12px 12px">`;
         if (r.is_admin) {
             html += `<div style="font-size:12px;color:var(--text-muted)">Quản trị viên luôn có toàn quyền (không thể chỉnh).</div>`;
         } else {
@@ -2320,11 +2323,21 @@ function renderPermissionManager() {
                 html += `</div></div>`;
             });
         }
-        html += `</div>`;
+        html += `</div></div>`;
     });
     html += '</div>';
     showTableOpModal('Phân quyền vai trò', html);
 }
+
+window.togglePermRole = function(slug) {
+    const card = document.querySelector(`.perm-role-card[data-role="${slug}"]`);
+    if (!card) return;
+    const body = card.querySelector('.perm-role-body');
+    const caret = card.querySelector('.perm-caret');
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    if (caret) caret.style.transform = open ? '' : 'rotate(90deg)';
+};
 
 window.saveRolePerms = async function(slug) {
     const card = document.querySelector(`.perm-role-card[data-role="${slug}"]`);
