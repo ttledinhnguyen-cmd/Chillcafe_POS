@@ -13,6 +13,17 @@
     <meta name="apple-mobile-web-app-title" content="Chill POS">
     <link rel="apple-touch-icon" href="/picture/pwa/apple-touch-icon.png">
     <link rel="stylesheet" href="/pos/style.css?v=60">
+    <!-- Layout guarantee inline (served no-cache) so a stale CDN-cached style.css can't break full-width tables/grids on desktop -->
+    <style id="layout-guarantee">
+    @media (min-width: 769px) {
+        .app { display: flex; }
+        .main-content { flex: 1 1 auto; margin-left: var(--sidebar-width, 220px); width: auto; max-width: none; min-width: 0; }
+        .page { width: auto; max-width: none; }
+        .data-table { width: 100% !important; max-width: none !important; display: table !important; table-layout: auto; }
+        .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .grid-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
