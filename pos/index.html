@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Chill POS">
     <link rel="apple-touch-icon" href="/picture/pwa/apple-touch-icon.png">
-    <link rel="stylesheet" href="/pos/style.css?v=48">
+    <link rel="stylesheet" href="/pos/style.css?v=49">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -327,7 +327,10 @@
             <div class="page" id="page-users">
                 <div class="page-header">
                     <h3>Quản lý tài khoản</h3>
-                    <button class="btn btn-primary" id="add-user-btn">+ Thêm tài khoản</button>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn" id="manage-roles-btn" data-perm="admin">Phân quyền</button>
+                        <button class="btn btn-primary" id="add-user-btn">+ Thêm tài khoản</button>
+                    </div>
                 </div>
                 <table class="data-table" id="users-table">
                     <thead><tr><th>Tên đăng nhập</th><th>Tên hiển thị</th><th>Quyền</th><th>Ngày tạo</th><th></th></tr></thead>
@@ -601,6 +604,6 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-    <script src="/pos/script.js?v=54"></script>
+    <script src="/pos/script.js?v=55"></script>
 </body>
 </html>

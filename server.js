@@ -172,7 +172,38 @@ try { db.exec(`
         ip TEXT,
         created_at TEXT DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS roles (
+        slug TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        is_system INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS role_permissions (
+        role TEXT NOT NULL,
+        perm TEXT NOT NULL,
+        PRIMARY KEY (role, perm)
+    );
 `); } catch (e) { console.warn('DB create tables skipped:', e.message); }
+
+// ===== PERMISSION CATALOG (shared by API + seed) =====
+const PERMISSION_CATALOG = [
+    { group: 'Tổng quan', perms: [{ key: 'dashboard.view', label: 'Xem tổng quan' }] },
+    { group: 'Bán hàng', perms: [{ key: 'pos.use', label: 'Dùng bán hàng (POS)' }] },
+    { group: 'Bàn', perms: [{ key: 'table.view', label: 'Xem bàn' }, { key: 'table.manage', label: 'Quản lý bàn' }] },
+    { group: 'Đơn hàng', perms: [{ key: 'order.view', label: 'Xem đơn hàng' }, { key: 'order.edit', label: 'Sửa đơn' }, { key: 'order.delete', label: 'Xóa đơn' }] },
+    { group: 'Thực đơn', perms: [{ key: 'menu.view', label: 'Xem thực đơn' }, { key: 'menu.edit', label: 'Thêm/sửa món' }, { key: 'menu.delete', label: 'Xóa món' }] },
+    { group: 'Ca làm việc', perms: [{ key: 'shift.view', label: 'Xem ca' }, { key: 'shift.manage', label: 'Quản lý ca' }] },
+    { group: 'Thu chi', perms: [{ key: 'transaction.view', label: 'Xem thu chi' }, { key: 'transaction.edit', label: 'Thêm/sửa thu chi' }, { key: 'transaction.delete', label: 'Xóa thu chi' }] },
+    { group: 'Kho hàng', perms: [{ key: 'inventory.view', label: 'Xem kho' }, { key: 'inventory.edit', label: 'Thêm/sửa kho' }, { key: 'inventory.delete', label: 'Xóa kho' }] },
+    { group: 'Nhân viên', perms: [{ key: 'staff.view', label: 'Xem nhân viên' }, { key: 'staff.edit', label: 'Thêm/sửa nhân viên' }, { key: 'staff.delete', label: 'Xóa nhân viên' }] },
+    { group: 'Báo cáo', perms: [{ key: 'report.view', label: 'Xem báo cáo' }] },
+];
+const ALL_PERMS = PERMISSION_CATALOG.flatMap(g => g.perms.map(p => p.key));
+const DEFAULT_ROLE_PERMS = {
+    manager: ['dashboard.view','pos.use','table.view','table.manage','order.view','order.edit','order.delete','menu.view','menu.edit','menu.delete','shift.view','shift.manage','transaction.view','transaction.edit','transaction.delete','inventory.view','inventory.edit','inventory.delete','staff.view','staff.edit','staff.delete','report.view'],
+    cashier: ['dashboard.view','pos.use','table.view','order.view','menu.view','shift.view'],
+    staff: ['dashboard.view','pos.use','table.view','order.view','menu.view'],
+};
 
 // Migrate & seed (all wrapped for readonly DB resilience)
 try {
@@ -200,6 +231,20 @@ addColumnSafe('staff', 'status', "TEXT DEFAULT 'active'");
 addColumnSafe('inventory', 'cost_price', 'INTEGER DEFAULT 0');
 addColumnSafe('menu', 'sort_order', 'INTEGER DEFAULT 0');
 addColumnSafe('menu', 'image_url', 'TEXT');
+
+// ===== ROLES & PERMISSIONS: seed system roles + default permissions =====
+try {
+    const upRole = db.prepare('INSERT OR IGNORE INTO roles (slug, name, is_system) VALUES (?, ?, 1)');
+    upRole.run('admin', 'Quản trị viên');
+    upRole.run('manager', 'Quản lý');
+    upRole.run('cashier', 'Thu ngân');
+    upRole.run('staff', 'Nhân viên');
+    const hasPerm = db.prepare('SELECT COUNT(*) c FROM role_permissions WHERE role = ?');
+    const insPerm = db.prepare('INSERT OR IGNORE INTO role_permissions (role, perm) VALUES (?, ?)');
+    for (const [role, perms] of Object.entries(DEFAULT_ROLE_PERMS)) {
+        if (hasPerm.get(role).c === 0) perms.forEach(p => insPerm.run(role, p));
+    }
+} catch (e) { console.warn('Seed roles skipped:', e.message); }
 
 // Insert default settings if empty
 const settingsCount = db.prepare('SELECT COUNT(*) as c FROM settings').get().c;
@@ -416,9 +461,26 @@ app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(cookieParser());
 
 // Session configuration
-const SESSION_SECRET = process.env.SESSION_SECRET || 'chill-cafe-pos-secret-2024-fixed-key';
+// Session secret: per-instance, generated & persisted (no shared hardcoded fallback)
+const SECRET_FILE = path.join(__dirname, 'data', 'session_secret.key');
+let SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET) {
+    try {
+        if (fs.existsSync(SECRET_FILE)) SESSION_SECRET = fs.readFileSync(SECRET_FILE, 'utf8').trim();
+        if (!SESSION_SECRET) {
+            SESSION_SECRET = crypto.randomBytes(48).toString('hex');
+            fs.writeFileSync(SECRET_FILE, SESSION_SECRET, { mode: 0o600 });
+            console.log('Generated new session secret at', SECRET_FILE);
+        }
+    } catch (e) {
+        console.warn('Session secret file error, using random in-memory secret:', e.message);
+        SESSION_SECRET = crypto.randomBytes(48).toString('hex');
+    }
+}
 const sessionDb = new Database(path.join(__dirname, 'data', 'sessions.db'));
 sessionDb.pragma('journal_mode = WAL');
+// Public traffic is always HTTPS (IIS forces HTTP->HTTPS upstream); needed for secure cookies behind proxy.
+app.use((req, res, next) => { req.headers['x-forwarded-proto'] = 'https'; next(); });
 app.use(session({
     store: new SqliteStore({
         client: sessionDb,
@@ -430,7 +492,7 @@ app.use(session({
     saveUninitialized: false,
     cookie: {
         httpOnly: true,
-        secure: false,
+        secure: true,
         sameSite: 'lax',
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
     },
@@ -459,9 +521,25 @@ const getClientIp = (req) => {
     const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '127.0.0.1';
     return ip.replace(/:\d+$/, '');
 };
+// Restrict printer connections to private LAN ranges (anti-SSRF)
+function isPrivateIp(ip) {
+    if (!ip) return false;
+    ip = String(ip).trim();
+    if (ip === 'localhost' || ip === '127.0.0.1' || ip === '::1') return true;
+    const m = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (!m) return false;
+    const o = [ +m[1], +m[2], +m[3], +m[4] ];
+    if (o.some(n => n > 255)) return false;
+    const [a, b] = o;
+    if (a === 10) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 169 && b === 254) return true;
+    return false;
+}
 const globalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 999999,
+    max: 5000,
     keyGenerator: getClientIp,
     standardHeaders: true,
     legacyHeaders: false,
@@ -472,7 +550,7 @@ app.use(globalLimiter);
 // Login rate limiter
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 999999,
+    max: 20,
     keyGenerator: getClientIp,
     standardHeaders: true,
     legacyHeaders: false,
@@ -527,6 +605,32 @@ function requireRole(...roles) {
             return res.status(403).json({ error: 'Bạn không có quyền thực hiện thao tác này' });
         }
         next();
+    };
+}
+
+// ===== PERMISSION HELPERS (role-based, admin always allowed) =====
+function roleHasPerm(role, perm) {
+    if (role === 'admin') return true;
+    try {
+        return !!db.prepare('SELECT 1 FROM role_permissions WHERE role = ? AND perm = ?').get(role, perm);
+    } catch (e) { return false; }
+}
+function getRolePerms(role) {
+    if (role === 'admin') return ALL_PERMS.slice();
+    try {
+        return db.prepare('SELECT perm FROM role_permissions WHERE role = ?').all(role).map(r => r.perm);
+    } catch (e) { return []; }
+}
+function isValidRole(role) {
+    try { return !!db.prepare('SELECT 1 FROM roles WHERE slug = ?').get(role); } catch (e) { return false; }
+}
+function requirePerm(perm) {
+    return (req, res, next) => {
+        if (!req.session || !req.session.userId) {
+            return res.status(401).json({ error: 'Chưa đăng nhập' });
+        }
+        if (req.session.role === 'admin' || roleHasPerm(req.session.role, perm)) return next();
+        return res.status(403).json({ error: 'Bạn không có quyền thực hiện thao tác này' });
     };
 }
 
@@ -655,7 +759,8 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
                 csrfToken: req.session.csrfToken,
                 username: user.username,
                 displayName: user.display_name || user.username,
-                role: user.role || 'admin'
+                role: user.role || 'admin',
+                permissions: getRolePerms(user.role || 'admin')
             });
         });
     } catch (err) {
@@ -712,7 +817,8 @@ app.post('/api/auth/google', async (req, res) => {
                 csrfToken: req.session.csrfToken,
                 username: user.username,
                 displayName: user.display_name || user.username,
-                role: user.role || 'admin'
+                role: user.role || 'admin',
+                permissions: getRolePerms(user.role || 'admin')
             });
         });
     } catch (err) {
@@ -736,7 +842,8 @@ app.get('/api/auth/check', (req, res) => {
             csrfToken: req.session.csrfToken,
             username: req.session.username,
             displayName: req.session.displayName,
-            role: req.session.role
+            role: req.session.role,
+            permissions: getRolePerms(req.session.role)
         });
     }
     res.json({ authenticated: false });
@@ -790,7 +897,7 @@ app.post('/api/users', requireRole('admin'), async (req, res) => {
     if (password.length < 6) {
         return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 6 ký tự' });
     }
-    if (role && !VALID_ROLES.includes(role)) {
+    if (role && !isValidRole(role)) {
         return res.status(400).json({ error: 'Quyền không hợp lệ' });
     }
     const existing = db.prepare('SELECT id FROM admin_users WHERE username = ?').get(username);
@@ -825,7 +932,7 @@ app.put('/api/users/:id', requireRole('admin'), async (req, res) => {
         }
     }
 
-    if (role && !VALID_ROLES.includes(role)) {
+    if (role && !isValidRole(role)) {
         return res.status(400).json({ error: 'Quyền không hợp lệ' });
     }
 
@@ -877,13 +984,85 @@ app.put('/api/users/:id/unlock', requireRole('admin'), (req, res) => {
     res.json({ success: true });
 });
 
+// ===== ROLES & PERMISSIONS API =====
+// Permission catalog (groups + keys/labels)
+app.get('/api/permissions', requireAuth, (req, res) => res.json(PERMISSION_CATALOG));
+
+// List roles with their granted permissions
+app.get('/api/roles', requireAuth, (req, res) => {
+    try {
+        const roles = db.prepare('SELECT slug, name, is_system FROM roles ORDER BY is_system DESC, name').all();
+        const userCounts = {};
+        db.prepare('SELECT role, COUNT(*) c FROM admin_users GROUP BY role').all().forEach(r => { userCounts[r.role] = r.c; });
+        res.json(roles.map(r => ({
+            slug: r.slug,
+            name: r.name,
+            is_system: !!r.is_system,
+            is_admin: r.slug === 'admin',
+            user_count: userCounts[r.slug] || 0,
+            permissions: r.slug === 'admin' ? ALL_PERMS.slice() : getRolePerms(r.slug)
+        })));
+    } catch (e) { res.status(500).json({ error: 'Lỗi tải vai trò' }); }
+});
+
+// Create a new role (admin only)
+app.post('/api/roles', requireRole('admin'), (req, res) => {
+    let { slug, name, permissions } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Vui lòng nhập tên vai trò' });
+    slug = (slug || name).toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
+    if (!slug) return res.status(400).json({ error: 'Tên vai trò không hợp lệ' });
+    if (db.prepare('SELECT 1 FROM roles WHERE slug = ?').get(slug)) return res.status(409).json({ error: 'Vai trò đã tồn tại' });
+    db.prepare('INSERT INTO roles (slug, name, is_system) VALUES (?, ?, 0)').run(slug, name.trim());
+    if (Array.isArray(permissions)) {
+        const ins = db.prepare('INSERT OR IGNORE INTO role_permissions (role, perm) VALUES (?, ?)');
+        permissions.filter(p => ALL_PERMS.includes(p)).forEach(p => ins.run(slug, p));
+    }
+    auditLog(req.session.userId, 'ROLE_CREATED', `Created role: ${slug}`, req.ip);
+    res.json({ success: true, slug });
+});
+
+// Update a role's name / permissions (admin only; admin role is locked)
+app.put('/api/roles/:slug', requireRole('admin'), (req, res) => {
+    const { slug } = req.params;
+    if (slug === 'admin') return res.status(400).json({ error: 'Không thể sửa quyền của Quản trị viên' });
+    const role = db.prepare('SELECT * FROM roles WHERE slug = ?').get(slug);
+    if (!role) return res.status(404).json({ error: 'Không tìm thấy vai trò' });
+    const { name, permissions } = req.body;
+    if (name && name.trim()) db.prepare('UPDATE roles SET name = ? WHERE slug = ?').run(name.trim(), slug);
+    if (Array.isArray(permissions)) {
+        const valid = permissions.filter(p => ALL_PERMS.includes(p));
+        const tx = db.transaction(() => {
+            db.prepare('DELETE FROM role_permissions WHERE role = ?').run(slug);
+            const ins = db.prepare('INSERT OR IGNORE INTO role_permissions (role, perm) VALUES (?, ?)');
+            valid.forEach(p => ins.run(slug, p));
+        });
+        tx();
+    }
+    auditLog(req.session.userId, 'ROLE_UPDATED', `Updated role: ${slug}`, req.ip);
+    res.json({ success: true });
+});
+
+// Delete a role (admin only; cannot delete system roles or roles still in use)
+app.delete('/api/roles/:slug', requireRole('admin'), (req, res) => {
+    const { slug } = req.params;
+    const role = db.prepare('SELECT * FROM roles WHERE slug = ?').get(slug);
+    if (!role) return res.status(404).json({ error: 'Không tìm thấy vai trò' });
+    if (role.is_system) return res.status(400).json({ error: 'Không thể xóa vai trò hệ thống' });
+    const inUse = db.prepare('SELECT COUNT(*) c FROM admin_users WHERE role = ?').get(slug).c;
+    if (inUse > 0) return res.status(400).json({ error: `Còn ${inUse} tài khoản đang dùng vai trò này. Hãy đổi vai trò cho họ trước.` });
+    db.prepare('DELETE FROM role_permissions WHERE role = ?').run(slug);
+    db.prepare('DELETE FROM roles WHERE slug = ?').run(slug);
+    auditLog(req.session.userId, 'ROLE_DELETED', `Deleted role: ${slug}`, req.ip);
+    res.json({ success: true });
+});
+
 // ===== TABLES API =====
 app.get('/api/tables', requireAuth, (req, res) => {
     const tables = db.prepare('SELECT * FROM tables ORDER BY sort_order, name').all();
     res.json(tables);
 });
 
-app.post('/api/tables', requireRole('admin', 'manager'), (req, res) => {
+app.post('/api/tables', requirePerm('table.manage'), (req, res) => {
     const { name, area } = req.body;
     if (!validateString(name)) return res.status(400).json({ error: 'Tên bàn không hợp lệ' });
     const existing = db.prepare('SELECT id FROM tables WHERE name = ?').get(name.trim());
@@ -894,7 +1073,7 @@ app.post('/api/tables', requireRole('admin', 'manager'), (req, res) => {
     res.json({ success: true });
 });
 
-app.put('/api/tables/:id', requireRole('admin', 'manager'), (req, res) => {
+app.put('/api/tables/:id', requirePerm('table.manage'), (req, res) => {
     const { name, area, status } = req.body;
     const table = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id);
     if (!table) return res.status(404).json({ error: 'Không tìm thấy bàn' });
@@ -914,7 +1093,7 @@ app.put('/api/tables/:id', requireRole('admin', 'manager'), (req, res) => {
     res.json({ success: true });
 });
 
-app.delete('/api/tables/:id', requireRole('admin', 'manager'), (req, res) => {
+app.delete('/api/tables/:id', requirePerm('table.manage'), (req, res) => {
     const table = db.prepare('SELECT name FROM tables WHERE id = ?').get(req.params.id);
     if (!table) return res.status(404).json({ error: 'Không tìm thấy bàn' });
     db.prepare('DELETE FROM tables WHERE id = ?').run(req.params.id);
@@ -928,7 +1107,7 @@ app.get('/api/menu', requireAuth, (req, res) => {
     res.json(menu);
 });
 
-app.post('/api/menu', requireRole('admin', 'manager'), (req, res) => {
+app.post('/api/menu', requirePerm('menu.edit'), (req, res) => {
     const { id, name, category, price, description, status, image_url } = req.body;
     if (!validateString(name)) return res.status(400).json({ error: 'Tên món không hợp lệ' });
     if (!validateString(category)) return res.status(400).json({ error: 'Danh mục không hợp lệ' });
@@ -955,7 +1134,7 @@ app.post('/api/menu', requireRole('admin', 'manager'), (req, res) => {
     res.json({ success: true });
 });
 
-app.delete('/api/menu/:id', requireRole('admin', 'manager'), (req, res) => {
+app.delete('/api/menu/:id', requirePerm('menu.delete'), (req, res) => {
     const item = db.prepare('SELECT name FROM menu WHERE id = ?').get(req.params.id);
     if (!item) return res.status(404).json({ error: 'Không tìm thấy món' });
     db.prepare('DELETE FROM menu WHERE id = ?').run(req.params.id);
@@ -965,7 +1144,7 @@ app.delete('/api/menu/:id', requireRole('admin', 'manager'), (req, res) => {
 });
 
 // ===== MENU IMAGE UPLOAD =====
-app.post('/api/menu/:id/image', requireRole('admin', 'manager'), menuImageUpload.single('image'), (req, res) => {
+app.post('/api/menu/:id/image', requirePerm('menu.edit'), menuImageUpload.single('image'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Không có file ảnh' });
     const item = db.prepare('SELECT id, image_url FROM menu WHERE id = ?').get(req.params.id);
     if (!item) {
@@ -1309,7 +1488,7 @@ app.post('/api/orders/:id/pay', requireAuth, (req, res) => {
 });
 
 // Delete order (admin only)
-app.delete('/api/orders/:id', requireRole('admin'), (req, res) => {
+app.delete('/api/orders/:id', requirePerm('order.delete'), (req, res) => {
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
     if (!order) return res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
 
@@ -1332,7 +1511,7 @@ app.delete('/api/orders/:id', requireRole('admin'), (req, res) => {
 });
 
 // ===== TAX REPORT API =====
-app.get('/api/reports/tax', requireRole('admin', 'manager'), (req, res) => {
+app.get('/api/reports/tax', requirePerm('report.view'), (req, res) => {
     const { from, to } = req.query;
     if (!from || !to) return res.status(400).json({ error: 'Thiếu ngày bắt đầu/kết thúc' });
 
@@ -1482,7 +1661,7 @@ app.get('/api/transactions', requireAuth, (req, res) => {
     res.json(db.prepare(query).all(...params));
 });
 
-app.post('/api/transactions', requireAuth, (req, res) => {
+app.post('/api/transactions', requirePerm('transaction.edit'), (req, res) => {
     const { type, category, amount, payment_method, description } = req.body;
 
     if (!type || !['income', 'expense'].includes(type)) {
@@ -1503,7 +1682,7 @@ app.post('/api/transactions', requireAuth, (req, res) => {
     res.json({ success: true });
 });
 
-app.delete('/api/transactions/:id', requireRole('admin', 'manager'), (req, res) => {
+app.delete('/api/transactions/:id', requirePerm('transaction.delete'), (req, res) => {
     const tx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
     if (!tx) return res.status(404).json({ error: 'Không tìm thấy giao dịch' });
     db.prepare('DELETE FROM transactions WHERE id = ?').run(req.params.id);
@@ -1516,7 +1695,7 @@ app.get('/api/inventory', requireAuth, (req, res) => {
     res.json(db.prepare('SELECT * FROM inventory ORDER BY name').all());
 });
 
-app.post('/api/inventory', requireAuth, (req, res) => {
+app.post('/api/inventory', requirePerm('inventory.edit'), (req, res) => {
     const { id, name, qty, unit, min_qty, cost_price } = req.body;
     if (!validateString(name)) return res.status(400).json({ error: 'Tên nguyên liệu không hợp lệ' });
     if (!validateNumber(qty, 0, 1000000)) return res.status(400).json({ error: 'Số lượng không hợp lệ' });
@@ -1538,7 +1717,7 @@ app.post('/api/inventory', requireAuth, (req, res) => {
     res.json({ success: true });
 });
 
-app.delete('/api/inventory/:id', requireRole('admin', 'manager'), (req, res) => {
+app.delete('/api/inventory/:id', requirePerm('inventory.delete'), (req, res) => {
     const item = db.prepare('SELECT name FROM inventory WHERE id = ?').get(req.params.id);
     if (!item) return res.status(404).json({ error: 'Không tìm thấy nguyên liệu' });
     db.prepare('DELETE FROM inventory WHERE id = ?').run(req.params.id);
@@ -1551,7 +1730,7 @@ app.get('/api/staff', requireAuth, (req, res) => {
     res.json(db.prepare('SELECT * FROM staff ORDER BY name').all());
 });
 
-app.post('/api/staff', requireRole('admin', 'manager'), (req, res) => {
+app.post('/api/staff', requirePerm('staff.edit'), (req, res) => {
     const { id, name, role, phone, shift, salary, status } = req.body;
     if (!validateString(name)) return res.status(400).json({ error: 'Tên nhân viên không hợp lệ' });
     const allowedRoles = ['barista', 'cashier', 'waiter', 'manager', 'kitchen'];
@@ -1574,7 +1753,7 @@ app.post('/api/staff', requireRole('admin', 'manager'), (req, res) => {
     res.json({ success: true });
 });
 
-app.delete('/api/staff/:id', requireRole('admin', 'manager'), (req, res) => {
+app.delete('/api/staff/:id', requirePerm('staff.delete'), (req, res) => {
     const staff = db.prepare('SELECT name FROM staff WHERE id = ?').get(req.params.id);
     if (!staff) return res.status(404).json({ error: 'Không tìm thấy nhân viên' });
     db.prepare('DELETE FROM staff WHERE id = ?').run(req.params.id);
@@ -1824,6 +2003,7 @@ app.delete('/api/table-orders/:tableId', requireAuth, (req, res) => {
 app.post('/api/printer/test', requireRole('admin', 'manager'), (req, res) => {
     const { ip, port } = req.body;
     if (!ip) return res.status(400).json({ error: 'Thiếu IP máy in' });
+    if (!isPrivateIp(ip)) return res.status(400).json({ error: 'Chỉ cho phép IP máy in trong mạng nội bộ (LAN).' });
     const p = parseInt(port) || 9100;
 
     const client = new net.Socket();

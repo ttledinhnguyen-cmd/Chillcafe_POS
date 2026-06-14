@@ -21,7 +21,14 @@ const App = {
     currentCategory: 'all',
     tableOrders: {},  // { tableId: { cart: [...], discount: {...} } }
     hasOpenShift: false,
+    permissions: [],  // permission keys granted to current user's role
+    rolesCache: [],   // cached roles list for dropdowns / permission manager
 };
+
+// Current user has a permission? (admin always yes)
+function hasPerm(perm) {
+    return App.user?.role === 'admin' || (App.permissions || []).includes(perm);
+}
 
 // ===== API CLIENT =====
 const api = {
@@ -285,7 +292,7 @@ async function loadCategoryLabels() {
         categoryLabels = { ...DEFAULT_CATEGORY_LABELS, ...custom };
     } catch (e) { /* keep defaults */ }
 }
-const roleLabels = { staff: 'Nhân viên' };
+const roleLabels = { barista: 'Pha chế', cashier: 'Thu ngân', waiter: 'Phục vụ', kitchen: 'Bếp', manager: 'Quản lý' };
 const shiftLabels = { morning: 'Sáng', afternoon: 'Chiều', full: 'Cả ngày' };
 const userRoleLabels = { admin: 'Quản trị viên', manager: 'Quản lý', cashier: 'Thu ngân', staff: 'Nhân viên' };
 const userRoleColors = { admin: 'danger', manager: 'warning', cashier: 'success', staff: 'default' };
@@ -349,27 +356,54 @@ async function showApp() {
     navigate('pos');
 }
 
+// Map each sidebar page to the permission required to see it.
+// '__admin__' = admin only; null/undefined = always visible when logged in.
+const NAV_PERM = {
+    dashboard: 'dashboard.view',
+    pos: 'pos.use',
+    tables: 'table.manage',
+    orders: 'order.view',
+    menu: 'menu.view',
+    shifts: 'shift.view',
+    transactions: 'transaction.view',
+    inventory: 'inventory.view',
+    staff: 'staff.view',
+    reports: 'report.view',
+    users: '__admin__',
+    settings: '__admin__',
+};
+
 function applyRolePermissions() {
     const role = App.user?.role || 'staff';
-    // Hide/show sidebar items based on role
-    $$('.sidebar-menu li[data-role]').forEach(li => {
-        const allowed = li.dataset.role.split(',');
-        li.style.display = allowed.includes(role) ? '' : 'none';
-    });
-    // Hide action buttons for non-admin/manager
-    const isAdminOrManager = ['admin', 'manager'].includes(role);
     const isAdmin = role === 'admin';
+    // Sidebar items gated by permission (works for custom roles too)
+    $$('.sidebar-menu li[data-page]').forEach(li => {
+        const page = li.dataset.page;
+        const need = NAV_PERM[page];
+        let show;
+        if (need === undefined) show = true;
+        else if (need === '__admin__') show = isAdmin;
+        else show = hasPerm(need);
+        li.style.display = show ? '' : 'none';
+    });
+    // Action elements gated by [data-perm] (supports legacy admin/manager and permission keys)
     document.querySelectorAll('[data-perm]').forEach(el => {
         const perm = el.dataset.perm;
-        if (perm === 'admin') el.style.display = isAdmin ? '' : 'none';
-        else if (perm === 'manager') el.style.display = isAdminOrManager ? '' : 'none';
+        let show;
+        if (perm === 'admin') show = isAdmin;
+        else if (perm === 'manager') show = ['admin', 'manager'].includes(role);
+        else show = hasPerm(perm);
+        el.style.display = show ? '' : 'none';
     });
-    // Staff: reorder sidebar (POS first) and navigate to POS
-    if (role === 'staff') {
+    // Land on the first page the user is allowed to use
+    const prefer = hasPerm('pos.use') ? 'pos' : (hasPerm('dashboard.view') ? 'dashboard' : null);
+    if (prefer === 'pos') {
         const menu = document.querySelector('.sidebar-menu');
         const posItem = menu.querySelector('[data-page="pos"]');
-        if (posItem) menu.insertBefore(posItem, menu.firstElementChild);
+        if (posItem && role !== 'admin' && role !== 'manager') menu.insertBefore(posItem, menu.firstElementChild);
         navigate('pos');
+    } else if (prefer === 'dashboard') {
+        navigate('dashboard');
     }
 }
 
@@ -404,6 +438,7 @@ $('#login-form').addEventListener('submit', async (e) => {
         const data = await api.post('/api/auth/login', body);
         App.csrfToken = data.csrfToken;
         App.user = { username: data.username, displayName: data.displayName, role: data.role };
+        App.permissions = data.permissions || [];
         if ($('#login-remember')?.checked) {
             localStorage.setItem('chill_login', JSON.stringify({ u: username, p: password }));
         } else {
@@ -2112,7 +2147,7 @@ async function loadStaff() {
     try {
         const staff = await api.get('/api/staff');
         const tbody = $('#staff-table tbody');
-        tbody.innerHTML = staff.map(s => `<tr>
+        tbody.innerHTML = !staff.length ? `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px">Chưa có nhân viên nào. Bấm "Thêm nhân viên" để tạo hồ sơ đầu tiên.</td></tr>` : staff.map(s => `<tr>
             <td>${s.name}</td>
             <td>${roleLabels[s.role] || s.role}</td>
             <td>${s.phone || '-'}</td>
@@ -2165,15 +2200,27 @@ window.deleteStaff = async (id) => {
 };
 
 // ===== USERS PAGE =====
+function roleLabel(slug) {
+    const r = (App.rolesCache || []).find(x => x.slug === slug);
+    return r ? r.name : (userRoleLabels[slug] || slug);
+}
+function roleOptions() {
+    const roles = App.rolesCache || [];
+    if (roles.length) return roles.map(r => [r.slug, r.name]);
+    return Object.entries(userRoleLabels);
+}
+
 async function loadUsers() {
     try {
+        // Refresh roles cache (for labels + dropdowns) — ignore failure
+        try { App.rolesCache = await api.get('/api/roles'); } catch (e) {}
         const users = await api.get('/api/users');
         const tbody = $('#users-table tbody');
         const isAdmin = App.user?.role === 'admin';
         tbody.innerHTML = users.map(u => `<tr>
             <td>${u.username}</td>
             <td>${u.display_name || u.username}</td>
-            <td><span class="badge badge-${userRoleColors[u.role] || 'default'}">${userRoleLabels[u.role] || u.role}</span></td>
+            <td><span class="badge badge-${userRoleColors[u.role] || 'info'}">${roleLabel(u.role)}</span></td>
             <td>${fmtDate(u.created_at)}</td>
             <td class="actions">
                 ${isAdmin ? `
@@ -2183,9 +2230,10 @@ async function loadUsers() {
             </td>
         </tr>`).join('');
 
-        // Show/hide add button based on role
         const addBtn = $('#add-user-btn');
         if (addBtn) addBtn.style.display = isAdmin ? '' : 'none';
+        const rolesBtn = $('#manage-roles-btn');
+        if (rolesBtn) rolesBtn.style.display = isAdmin ? '' : 'none';
     } catch (err) { toast(err.message, 'error'); }
 }
 
@@ -2194,7 +2242,7 @@ $('#add-user-btn')?.addEventListener('click', () => {
         { key: 'username', label: 'Tên đăng nhập', type: 'text', required: true },
         { key: 'display_name', label: 'Tên hiển thị', type: 'text' },
         { key: 'password', label: 'Mật khẩu', type: 'password', required: true },
-        { key: 'role', label: 'Quyền', type: 'select', options: Object.entries(userRoleLabels) },
+        { key: 'role', label: 'Vai trò', type: 'select', options: roleOptions() },
     ], async (data) => {
         await api.post('/api/users', data);
         toast('Đã thêm tài khoản');
@@ -2205,7 +2253,7 @@ $('#add-user-btn')?.addEventListener('click', () => {
 window.editUser = (id, username, displayName, role) => {
     showFormModal('Sửa tài khoản: ' + username, [
         { key: 'display_name', label: 'Tên hiển thị', type: 'text', value: displayName },
-        { key: 'role', label: 'Quyền', type: 'select', value: role, options: Object.entries(userRoleLabels) },
+        { key: 'role', label: 'Vai trò', type: 'select', value: role, options: roleOptions() },
         { key: 'password', label: 'Mật khẩu mới (để trống nếu không đổi)', type: 'password' },
     ], async (data) => {
         if (!data.password) delete data.password;
@@ -2222,6 +2270,79 @@ window.deleteUser = async (id, username) => {
         toast('Đã xóa tài khoản');
         loadUsers();
     } catch (err) { toast(err.message, 'error'); }
+};
+
+// ===== ROLE / PERMISSION MANAGER =====
+$('#manage-roles-btn')?.addEventListener('click', openPermissionManager);
+
+async function openPermissionManager() {
+    try {
+        const [cat, roles] = await Promise.all([api.get('/api/permissions'), api.get('/api/roles')]);
+        App._permCatalog = cat;
+        App.rolesCache = roles;
+        renderPermissionManager();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function renderPermissionManager() {
+    const cat = App._permCatalog || [];
+    const roles = App.rolesCache || [];
+    let html = '<div style="max-height:70vh;overflow:auto;padding:2px">';
+    html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button class="btn btn-primary btn-sm" onclick="addRolePrompt()">+ Thêm vai trò</button></div>';
+    roles.forEach(r => {
+        html += `<div class="perm-role-card" data-role="${r.slug}" style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px">`;
+        html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap">`;
+        html += `<b>${r.name}</b>`;
+        html += `<span style="display:flex;gap:6px;align-items:center"><span style="font-size:11px;color:var(--text-muted)">${r.user_count} tài khoản${r.is_system ? ' · hệ thống' : ''}</span>`;
+        if (!r.is_admin) html += `<button class="btn btn-sm btn-primary" onclick="saveRolePerms('${r.slug}')">Lưu</button>`;
+        if (!r.is_system) html += `<button class="btn btn-sm btn-danger" onclick="deleteRoleConfirm('${r.slug}','${r.name.replace(/'/g, "\\'")}')">Xóa</button>`;
+        html += `</span></div>`;
+        if (r.is_admin) {
+            html += `<div style="font-size:12px;color:var(--text-muted)">Quản trị viên luôn có toàn quyền (không thể chỉnh).</div>`;
+        } else {
+            cat.forEach(g => {
+                html += `<div style="margin:8px 0"><div style="font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:4px">${g.group}</div><div style="display:flex;flex-wrap:wrap;gap:12px">`;
+                g.perms.forEach(p => {
+                    const checked = r.permissions.includes(p.key) ? 'checked' : '';
+                    html += `<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox" data-perm="${p.key}" ${checked}> ${p.label}</label>`;
+                });
+                html += `</div></div>`;
+            });
+        }
+        html += `</div>`;
+    });
+    html += '</div>';
+    showTableOpModal('Phân quyền vai trò', html);
+}
+
+window.saveRolePerms = async function(slug) {
+    const card = document.querySelector(`.perm-role-card[data-role="${slug}"]`);
+    if (!card) return;
+    const perms = Array.from(card.querySelectorAll('input[type=checkbox][data-perm]:checked')).map(c => c.dataset.perm);
+    try {
+        await api.put('/api/roles/' + slug, { permissions: perms });
+        toast('Đã lưu quyền cho vai trò');
+        App.rolesCache = await api.get('/api/roles');
+    } catch (e) { toast(e.message, 'error'); }
+};
+
+window.addRolePrompt = async function() {
+    const name = prompt('Tên vai trò mới (vd: Pha chế):');
+    if (!name || !name.trim()) return;
+    try {
+        await api.post('/api/roles', { name: name.trim(), permissions: [] });
+        toast('Đã thêm vai trò');
+        await openPermissionManager();
+    } catch (e) { toast(e.message, 'error'); }
+};
+
+window.deleteRoleConfirm = async function(slug, name) {
+    if (!confirm(`Xóa vai trò "${name}"?`)) return;
+    try {
+        await api.del('/api/roles/' + slug);
+        toast('Đã xóa vai trò');
+        await openPermissionManager();
+    } catch (e) { toast(e.message, 'error'); }
 };
 
 // ===== REPORTS PAGE =====
