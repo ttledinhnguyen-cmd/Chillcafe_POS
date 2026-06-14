@@ -21,13 +21,24 @@ const App = {
     currentCategory: 'all',
     tableOrders: {},  // { tableId: { cart: [...], discount: {...} } }
     hasOpenShift: false,
-    permissions: [],  // permission keys granted to current user's role
+    permissions: null, // null = unknown (old backend → legacy fallback); array = explicit grants
     rolesCache: [],   // cached roles list for dropdowns / permission manager
+};
+
+// Legacy role permissions used only when the server doesn't send a permission
+// list yet (e.g. backend not restarted) so the UI doesn't break in the meantime.
+const LEGACY_ROLE_PERMS = {
+    manager: ['dashboard.view','pos.use','table.view','table.manage','order.view','order.edit','order.delete','menu.view','menu.edit','menu.delete','shift.view','shift.manage','transaction.view','transaction.edit','transaction.delete','inventory.view','inventory.edit','inventory.delete','staff.view','staff.edit','staff.delete','report.view'],
+    cashier: ['dashboard.view','pos.use','table.view','order.view','menu.view','shift.view'],
+    staff: ['dashboard.view','pos.use','table.view','order.view','menu.view'],
 };
 
 // Current user has a permission? (admin always yes)
 function hasPerm(perm) {
-    return App.user?.role === 'admin' || (App.permissions || []).includes(perm);
+    if (App.user?.role === 'admin') return true;
+    if (Array.isArray(App.permissions)) return App.permissions.includes(perm);
+    const legacy = LEGACY_ROLE_PERMS[App.user?.role] || LEGACY_ROLE_PERMS.staff;
+    return legacy.includes(perm);
 }
 
 // ===== API CLIENT =====
@@ -438,7 +449,7 @@ $('#login-form').addEventListener('submit', async (e) => {
         const data = await api.post('/api/auth/login', body);
         App.csrfToken = data.csrfToken;
         App.user = { username: data.username, displayName: data.displayName, role: data.role };
-        App.permissions = data.permissions || [];
+        App.permissions = data.permissions || null;
         if ($('#login-remember')?.checked) {
             localStorage.setItem('chill_login', JSON.stringify({ u: username, p: password }));
         } else {
