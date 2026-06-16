@@ -225,6 +225,13 @@ a { color: var(--primary); text-decoration: none; }
 #tables-grid .drag-handle:active { cursor: grabbing; }
 #tables-grid .drag-handle svg { width: 20px; height: 20px; display: block; pointer-events: none; }
 .table-card.dragging { opacity: .4; outline: 2px dashed var(--primary); }
+/* Chế độ khóa (xem): thẻ gọn, chỉ tên */
+#tables-grid:not(.editing) .table-card { padding: 14px 8px; cursor: default; }
+#tables-grid:not(.editing) .table-card:hover { transform: none; border-color: var(--border); }
+/* Icon đổi tên khu vực (chỉ hiện khi mở khóa) */
+.floor-rename { background: none; border: none; cursor: pointer; color: #9aa3a7; padding: 2px 5px; line-height: 0; border-radius: 6px; }
+.floor-rename:hover { color: var(--primary); background: rgba(42, 111, 130, .08); }
+.floor-rename .ico { width: 15px; height: 15px; }
 .table-card.dragging { opacity: .35; }
 .floor-drop.drop-target {
     outline: 2px dashed var(--primary); outline-offset: 4px; border-radius: 8px;

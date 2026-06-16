@@ -1472,53 +1472,109 @@ function nativeSunmiPrint() {
 
 // ===== TABLES PAGE =====
 const DRAG_GRIP_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg>';
+const LOCK_CLOSED_SVG = '<svg class="ico" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+const LOCK_OPEN_SVG = '<svg class="ico" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
+const PENCIL_SVG = '<svg class="ico" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+
+// Cập nhật header theo trạng thái khóa/mở của trang Quản lý bàn
+function applyTableLockUI() {
+    const on = !!App.tableEditMode;
+    const af = $('#add-floor-btn'), at = $('#add-table-btn'), b = $('#manage-floors-btn');
+    if (af) af.style.display = on ? '' : 'none';
+    if (at) at.style.display = on ? '' : 'none';
+    if (b) {
+        b.innerHTML = on ? (LOCK_OPEN_SVG + ' Khóa lại') : (LOCK_CLOSED_SVG + ' Mở khóa để sửa');
+        b.classList.toggle('btn-primary', on);
+        b.title = on ? 'Đang cho phép chỉnh sửa — bấm để khóa' : 'Đang khóa — bấm để cho phép kéo/sửa/xóa';
+    }
+}
 
 async function loadTables() {
+    applyTableLockUI();
     try {
         const tables = await api.get('/api/tables');
         App.tables = tables;
         App.extraFloors = App.extraFloors || [];
         const grid = $('#tables-grid');
+        const editing = !!App.tableEditMode;
         const groups = groupTablesByFloor(tables);
-        // Bỏ các tầng "thêm tay" đã có bàn thật (đã hiện trong groups)
+        // Bỏ các khu vực "thêm tay" đã có bàn thật (đã hiện trong groups)
         const realNames = new Set(groups.map(g => g.name));
         App.extraFloors = App.extraFloors.filter(f => !realNames.has(f));
-        const allGroups = groups.concat(App.extraFloors.map(f => ({ name: f, tables: [] })));
+        // Khu vực trống chỉ hiện khi đang ở chế độ sửa (để kéo bàn vào)
+        const allGroups = editing ? groups.concat(App.extraFloors.map(f => ({ name: f, tables: [] }))) : groups;
 
         const cardHtml = t =>
             `<div class="table-card ${t.status}" data-id="${t.id}" data-area="${escapeHtmlSafe((t.area || '').trim())}">
-                <span class="drag-handle" title="Kéo để sắp xếp / đổi khu vực">${DRAG_GRIP_SVG}</span>
+                ${editing ? `<span class="drag-handle" title="Kéo để sắp xếp / đổi khu vực">${DRAG_GRIP_SVG}</span>` : ''}
                 <div class="table-name">${t.name}</div>
-                <div class="table-card-actions">
+                ${editing ? `<div class="table-card-actions">
                     <button class="btn btn-sm" onclick="editTable(${t.id},'${t.name.replace(/'/g, "\\'")}','${(t.area || '').replace(/'/g, "\\'")}')">Sửa</button>
                     <button class="btn btn-sm btn-danger" onclick="deleteTable(${t.id})">Xóa</button>
-                </div>
+                </div>` : ''}
             </div>`;
 
         grid.classList.add('has-floors');
+        grid.classList.toggle('editing', editing);
         grid.innerHTML = allGroups.map(g => {
             const cards = g.tables.map(cardHtml).join('');
-            const empty = g.tables.length ? '' : '<div class="floor-empty-hint">Kéo bàn vào đây để thêm vào khu vực này</div>';
+            const empty = (editing && !g.tables.length) ? '<div class="floor-empty-hint">Kéo bàn vào đây để thêm vào khu vực này</div>' : '';
+            const safeName = escapeHtmlSafe(g.name);
+            const renameBtn = editing ? `<button class="floor-rename" title="Đổi tên khu vực" onclick="renameFloorPrompt('${g.name.replace(/'/g, "\\'")}')">${PENCIL_SVG}</button>` : '';
             return `<div class="floor-section">
-                <div class="floor-header">${escapeHtmlSafe(g.name) || 'Chưa phân khu vực'} <span style="font-weight:400;color:#9aa3a7;font-size:12px">(${g.tables.length})</span></div>
-                <div class="table-grid floor-drop" data-floor="${escapeHtmlSafe(g.name)}">${cards}${empty}</div>
+                <div class="floor-header"><span class="floor-name">${safeName || 'Chưa phân khu vực'}</span> <span style="font-weight:400;color:#9aa3a7;font-size:12px">(${g.tables.length})</span>${renameBtn}</div>
+                <div class="table-grid floor-drop" data-floor="${safeName}">${cards}${empty}</div>
             </div>`;
         }).join('');
-        setupTableDnD();
+        if (editing) setupTableDnD();
     } catch (err) { toast(err.message, 'error'); }
 }
 
-window.addFloorPrompt = () => {
-    const name = (prompt('Tên khu vực mới (VD: Tầng 1, Sân thượng, Khu VIP):') || '').trim();
-    if (!name) return;
-    App.extraFloors = App.extraFloors || [];
-    const exists = groupTablesByFloor(App.tables).some(g => g.name === name) || App.extraFloors.includes(name);
-    if (exists) { toast('Khu vực này đã có rồi'); return; }
-    App.extraFloors.push(name);
+// Nút "Quản lý khu vực" -> khóa/mở khóa chỉnh sửa (mặc định khóa)
+$('#manage-floors-btn')?.addEventListener('click', () => {
+    App.tableEditMode = !App.tableEditMode;
     loadTables();
-    toast(`Đã thêm khu vực "${name}" — kéo bàn vào để dùng`);
+});
+
+window.addFloorPrompt = () => {
+    showFormModal('Thêm khu vực mới', [
+        { key: 'name', label: 'Tên khu vực', type: 'text', required: true, placeholder: 'VD: Tầng 1, Sân thượng, Khu VIP' },
+    ], async (data) => {
+        const name = (data.name || '').trim();
+        if (!name) return;
+        App.extraFloors = App.extraFloors || [];
+        const exists = groupTablesByFloor(App.tables).some(g => g.name === name) || App.extraFloors.includes(name);
+        if (exists) { toast('Khu vực này đã có rồi'); return; }
+        App.extraFloors.push(name);
+        loadTables();
+        toast(`Đã thêm khu vực "${name}" — kéo bàn vào để dùng`);
+    });
 };
 $('#add-floor-btn')?.addEventListener('click', addFloorPrompt);
+
+// Đổi tên khu vực (icon bút chì cạnh tên khu vực, dùng modal trắng)
+window.renameFloorPrompt = (oldName) => {
+    showFormModal('Đổi tên khu vực', [
+        { key: 'name', label: 'Tên khu vực', type: 'text', value: oldName, required: true },
+    ], async (data) => {
+        const newName = (data.name || '').trim();
+        if (!newName || newName === oldName) return;
+        await renameFloor(oldName, newName);
+    });
+};
+
+async function renameFloor(oldName, newName) {
+    const affected = (App.tables || []).filter(t => (t.area || '').trim() === oldName);
+    // Đổi tên khu vực "thêm tay" (chưa có bàn)
+    const ei = (App.extraFloors || []).indexOf(oldName);
+    if (ei >= 0) { App.extraFloors[ei] = newName; }
+    if (!affected.length) { loadTables(); toast(`Đã đổi tên khu vực thành "${newName}"`); return; }
+    try {
+        for (const t of affected) { await api.put('/api/tables/' + t.id, { area: newName }); }
+        toast(`Đã đổi "${oldName || 'Chưa phân khu vực'}" → "${newName}" (${affected.length} bàn)`);
+        await loadTables();
+    } catch (err) { toast(err.message, 'error'); }
+}
 
 // Kéo-thả bàn: sắp xếp thứ tự + đổi khu vực (chuột + cảm ứng). Sortable kéo mượt.
 function setupTableDnD() {
@@ -1709,7 +1765,7 @@ window.saveFloorRename = async (btn) => {
     }
 };
 
-$('#manage-floors-btn')?.addEventListener('click', openFloorManager);
+// (Nút #manage-floors-btn giờ là nút khóa/mở khóa — gắn ở phần Quản lý bàn phía trên)
 
 // ===== ORDERS PAGE =====
 async function loadOrders() {
@@ -3188,7 +3244,7 @@ function showFormModal(title, fields, onSave) {
             input = `<input type="text" id="form-${f.key}" name="${f.key}" list="${listId}" value="${f.value !== undefined ? f.value : ''}" placeholder="${f.placeholder || ''}" autocomplete="off">` +
                 `<datalist id="${listId}">${(f.options || []).map(o => `<option value="${escapeHtmlSafe(o)}"></option>`).join('')}</datalist>`;
         } else {
-            input = `<input type="${f.type}" id="form-${f.key}" name="${f.key}" value="${f.value !== undefined ? f.value : ''}" ${f.required ? 'required' : ''}>`;
+            input = `<input type="${f.type}" id="form-${f.key}" name="${f.key}" value="${f.value !== undefined ? f.value : ''}" ${f.placeholder ? `placeholder="${f.placeholder}"` : ''} ${f.required ? 'required' : ''}>`;
         }
         return `<div class="form-group"><label>${f.label}</label>${input}</div>`;
     }).join('');
