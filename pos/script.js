@@ -1487,9 +1487,8 @@ async function loadTables() {
 
         const cardHtml = t =>
             `<div class="table-card ${t.status}" data-id="${t.id}" data-area="${escapeHtmlSafe((t.area || '').trim())}">
-                <span class="drag-handle" title="Kéo để đổi khu vực">${DRAG_GRIP_SVG}</span>
+                <span class="drag-handle" title="Kéo để sắp xếp / đổi khu vực">${DRAG_GRIP_SVG}</span>
                 <div class="table-name">${t.name}</div>
-                <div class="table-status">${statusBadge(t.status)}</div>
                 <div class="table-card-actions">
                     <button class="btn btn-sm" onclick="editTable(${t.id},'${t.name.replace(/'/g, "\\'")}','${(t.area || '').replace(/'/g, "\\'")}')">Sửa</button>
                     <button class="btn btn-sm btn-danger" onclick="deleteTable(${t.id})">Xóa</button>
@@ -1521,12 +1520,35 @@ window.addFloorPrompt = () => {
 };
 $('#add-floor-btn')?.addEventListener('click', addFloorPrompt);
 
-// Kéo-thả bàn giữa các tầng (chuột + cảm ứng, qua Pointer Events)
+// Kéo-thả bàn: sắp xếp thứ tự + đổi khu vực (chuột + cảm ứng). Sortable kéo mượt.
 function setupTableDnD() {
     if (App._tableDnDInit) return;
     App._tableDnDInit = true;
-    let drag = null;
-    const clearTargets = () => document.querySelectorAll('.floor-drop.drop-target').forEach(z => z.classList.remove('drop-target'));
+    let drag = null, autoRAF = null;
+
+    const moveClone = () => {
+        if (drag && drag.clone) drag.clone.style.transform = 'translate(' + drag.x + 'px,' + drag.y + 'px)';
+        if (drag) drag.raf = null;
+    };
+
+    // Tìm thẻ cần chèn TRƯỚC trong vùng (theo vị trí con trỏ, hỗ trợ lưới nhiều cột)
+    const insertBeforeCard = (zone, x, y) => {
+        const cards = [...zone.querySelectorAll('.table-card:not(.dragging)')];
+        for (const c of cards) {
+            const r = c.getBoundingClientRect();
+            if (y < r.top + r.height / 2) return c;
+            if (y < r.bottom && x < r.left + r.width / 2) return c;
+        }
+        return null;
+    };
+
+    const autoScroll = () => {
+        if (!drag) { autoRAF = null; return; }
+        const m = 70;
+        if (drag.cy < m) window.scrollBy(0, -14);
+        else if (drag.cy > window.innerHeight - m) window.scrollBy(0, 14);
+        autoRAF = requestAnimationFrame(autoScroll);
+    };
 
     document.addEventListener('pointerdown', (e) => {
         const handle = e.target.closest('#tables-grid .drag-handle');
@@ -1534,53 +1556,79 @@ function setupTableDnD() {
         const card = handle.closest('.table-card');
         if (!card) return;
         e.preventDefault();
-        drag = { id: parseInt(card.dataset.id), card, fromArea: card.dataset.area || '', startX: e.clientX, startY: e.clientY, active: false, clone: null };
+        drag = { card, id: parseInt(card.dataset.id), fromArea: (card.dataset.area || ''), startX: e.clientX, startY: e.clientY, active: false, clone: null, x: 0, y: 0, cy: e.clientY, offX: 0, offY: 0, raf: null };
     });
 
     document.addEventListener('pointermove', (e) => {
         if (!drag) return;
+        drag.cy = e.clientY;
         if (!drag.active) {
-            if (Math.abs(e.clientX - drag.startX) < 6 && Math.abs(e.clientY - drag.startY) < 6) return;
+            if (Math.abs(e.clientX - drag.startX) < 5 && Math.abs(e.clientY - drag.startY) < 5) return;
             drag.active = true;
-            const rect = drag.card.getBoundingClientRect();
+            const r = drag.card.getBoundingClientRect();
+            drag.offX = drag.startX - r.left;
+            drag.offY = drag.startY - r.top;
             const clone = drag.card.cloneNode(true);
             clone.classList.add('table-drag-clone');
-            clone.style.width = rect.width + 'px';
+            clone.style.width = r.width + 'px';
+            clone.style.left = '0'; clone.style.top = '0';
             document.body.appendChild(clone);
             drag.clone = clone;
             drag.card.classList.add('dragging');
+            if (!autoRAF) autoScroll();
         }
-        drag.clone.style.left = e.clientX + 'px';
-        drag.clone.style.top = e.clientY + 'px';
-        clearTargets();
+        drag.x = e.clientX - drag.offX;
+        drag.y = e.clientY - drag.offY;
+        if (!drag.raf) drag.raf = requestAnimationFrame(moveClone);
+        // chèn thẻ thật (placeholder) vào vị trí mới để xem trước trực tiếp
         const zone = document.elementFromPoint(e.clientX, e.clientY)?.closest('.floor-drop');
-        if (zone) zone.classList.add('drop-target');
+        if (zone) {
+            const hint = zone.querySelector('.floor-empty-hint'); if (hint) hint.remove();
+            const before = insertBeforeCard(zone, e.clientX, e.clientY);
+            if (before) { if (drag.card.nextElementSibling !== before) zone.insertBefore(drag.card, before); }
+            else if (zone.lastElementChild !== drag.card) zone.appendChild(drag.card);
+        }
     });
 
-    const finish = async (e) => {
+    const finish = async () => {
         if (!drag) return;
         const d = drag; drag = null;
-        if (!d.active) return;
-        const zone = document.elementFromPoint(e.clientX, e.clientY)?.closest('.floor-drop');
+        if (autoRAF) { cancelAnimationFrame(autoRAF); autoRAF = null; }
         d.clone?.remove();
+        if (!d.active) return;
         d.card.classList.remove('dragging');
-        clearTargets();
-        if (!zone) return;
-        const target = zone.dataset.floor || '';
-        if (target === d.fromArea) return;
+        // xây thứ tự mới từ DOM (mọi vùng theo thứ tự hiển thị)
+        const order = [];
+        let newArea = d.fromArea;
+        document.querySelectorAll('#tables-grid .floor-drop').forEach(zone => {
+            const area = zone.dataset.floor || '';
+            zone.querySelectorAll('.table-card').forEach(c => {
+                const id = parseInt(c.dataset.id);
+                order.push({ id, area });
+                if (id === d.id) newArea = area;
+            });
+        });
         try {
-            await api.put(`/api/tables/${d.id}`, { area: target });
-            toast(`Đã chuyển bàn sang "${target || 'Chưa phân khu vực'}"`);
-            await loadTables();
-        } catch (err) { toast(err.message, 'error'); }
+            await api.put('/api/tables/reorder', { order });
+        } catch (err) {
+            // Server cũ chưa có endpoint sắp xếp → ít nhất giữ được việc đổi khu vực
+            if (newArea !== d.fromArea) {
+                try { await api.put('/api/tables/' + d.id, { area: newArea }); }
+                catch (e2) { toast('Lưu thất bại: ' + (e2.message || ''), 'error'); }
+            } else {
+                toast('Cần cập nhật/khởi động lại server để lưu thứ tự bàn', 'error');
+            }
+        }
+        await loadTables();
     };
     document.addEventListener('pointerup', finish);
     document.addEventListener('pointercancel', () => {
         if (!drag) return;
+        if (autoRAF) { cancelAnimationFrame(autoRAF); autoRAF = null; }
         drag.clone?.remove();
         drag.card?.classList.remove('dragging');
-        clearTargets();
         drag = null;
+        loadTables();
     });
 }
 

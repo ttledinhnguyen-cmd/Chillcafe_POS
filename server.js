@@ -1089,6 +1089,23 @@ app.post('/api/tables', requirePerm('table.manage'), (req, res) => {
     res.json({ success: true });
 });
 
+// Sắp xếp lại thứ tự + khu vực của bàn (kéo-thả). Phải đặt TRƯỚC route /:id.
+app.put('/api/tables/reorder', requirePerm('table.manage'), (req, res) => {
+    const { order } = req.body;
+    if (!Array.isArray(order) || order.length === 0) return res.status(400).json({ error: 'Danh sách sắp xếp không hợp lệ' });
+    const upd = db.prepare('UPDATE tables SET sort_order = ?, area = ? WHERE id = ?');
+    const tx = db.transaction((items) => {
+        items.forEach((it, i) => {
+            const id = parseInt(it.id);
+            if (!Number.isInteger(id)) return;
+            upd.run(i, sanitize(String(it.area || '')), id);
+        });
+    });
+    try { tx(order); } catch (e) { return res.status(500).json({ error: 'Lỗi server' }); }
+    auditLog(req.session.userId, 'TABLE_REORDER', String(order.length) + ' bàn', req.ip);
+    res.json({ success: true });
+});
+
 app.put('/api/tables/:id', requirePerm('table.manage'), (req, res) => {
     const { name, area, status } = req.body;
     const table = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id);

@@ -205,26 +205,26 @@ a { color: var(--primary); text-decoration: none; }
 .floor-header::before {
     content: ''; width: 4px; height: 16px; border-radius: 2px; background: var(--primary);
 }
-/* Trang Quản lý bàn: thẻ đều nhau + kéo-thả đổi khu vực */
-#tables-grid .table-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important; gap: 10px; }
+/* Trang Quản lý bàn: thẻ nhỏ gọn + kéo sắp xếp / đổi khu vực */
+#tables-grid .table-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)) !important; gap: 8px; }
 #tables-grid .table-card {
     position: relative; display: flex; flex-direction: column; align-items: stretch;
-    padding: 30px 10px 12px; gap: 6px; text-align: center;
+    padding: 24px 7px 7px; gap: 4px; text-align: center;
 }
 #tables-grid .table-card .table-name {
-    padding: 0 4px; min-height: 2.6em;
-    display: flex; align-items: center; justify-content: center;
-    overflow-wrap: anywhere;
+    padding: 0 2px; min-height: 2.4em; font-size: 12px; font-weight: 600; line-height: 1.2;
+    display: flex; align-items: center; justify-content: center; overflow-wrap: anywhere;
 }
-#tables-grid .table-card .table-status { margin: 0; }
-#tables-grid .table-card-actions { margin-top: auto; display: flex; gap: 6px; justify-content: center; padding-top: 4px; }
-#tables-grid .table-card-actions .btn { flex: 1; min-width: 0; }
+#tables-grid .table-card-actions { margin-top: auto; display: flex; gap: 4px; }
+#tables-grid .table-card-actions .btn { flex: 1; min-width: 0; padding: 5px 2px; font-size: 12px; }
 #tables-grid .drag-handle {
-    position: absolute; top: 7px; right: 7px; color: #b3bcc0; cursor: grab;
-    padding: 2px; line-height: 0; touch-action: none; user-select: none; -webkit-user-select: none;
+    position: absolute; top: 2px; right: 2px; color: #b3bcc0; cursor: grab;
+    padding: 6px; line-height: 0; touch-action: none; user-select: none; -webkit-user-select: none;
 }
 #tables-grid .drag-handle:hover { color: var(--primary); }
-#tables-grid .drag-handle svg { width: 18px; height: 18px; display: block; pointer-events: none; }
+#tables-grid .drag-handle:active { cursor: grabbing; }
+#tables-grid .drag-handle svg { width: 20px; height: 20px; display: block; pointer-events: none; }
+.table-card.dragging { opacity: .4; outline: 2px dashed var(--primary); }
 .table-card.dragging { opacity: .35; }
 .floor-drop.drop-target {
     outline: 2px dashed var(--primary); outline-offset: 4px; border-radius: 8px;
