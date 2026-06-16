@@ -2663,7 +2663,7 @@ function renderSalary() {
         return '<tr data-sid="' + s.id + '">' +
             '<td>' + s.name + '</td>' +
             '<td><select class="pr-type" style="padding:4px;border:1px solid var(--border);border-radius:4px;font-size:13px">' + opts + '</select></td>' +
-            '<td>' + inp('pr-rate', st.rate) + '</td>' +
+            '<td><div style="display:flex;align-items:center;gap:4px">' + inp('pr-rate', st.rate, 84) + '<span class="pr-unit" style="font-size:11px;color:var(--text-muted);white-space:nowrap">đ/' + (payTypeUnit[st.pay_type] || 'tháng') + '</span></div></td>' +
             '<td class="pr-buoi" style="font-weight:600;text-align:center">' + buoiCount(s.id) + '</td>' +
             '<td>' + inp('pr-hours', st.hours, 70) + '</td>' +
             '<td class="pr-base" style="font-weight:600">0d</td>' +
@@ -2698,6 +2698,7 @@ function updateSalaryRowEl(tr) {
     const sid = tr.dataset.sid, st = PR.state[sid]; if (!st) return;
     const { base, net } = salaryBaseNet(sid);
     const hEl = tr.querySelector('.pr-hours'); if (hEl) { const dis = st.pay_type !== 'hour'; hEl.disabled = dis; hEl.style.opacity = dis ? '.4' : '1'; }
+    const uEl = tr.querySelector('.pr-unit'); if (uEl) uEl.textContent = 'đ/' + (payTypeUnit[st.pay_type] || 'tháng');
     const bEl = tr.querySelector('.pr-buoi'); if (bEl) bEl.textContent = buoiCount(sid);
     tr.querySelector('.pr-base').textContent = fmt(base);
     tr.querySelector('.pr-net').textContent = fmt(net);
