@@ -174,7 +174,9 @@ a { color: var(--primary); text-decoration: none; }
 .data-table th, .data-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
 .data-table th { background: var(--bg); font-weight: 600; color: var(--text-light); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
 .data-table tr:hover td { background: #fafafa; }
-.data-table .actions { display: flex; gap: 4px; white-space: nowrap; justify-content: flex-end; }
+.data-table .actions { white-space: nowrap; text-align: right; }
+.data-table .actions .btn + .btn { margin-left: 4px; }
+.data-table .actions > div { display: inline-flex; gap: 4px; vertical-align: middle; }
 .data-table td:last-child { text-align: right; width: 1%; white-space: nowrap; }
 
 /* ===== BADGES ===== */
