@@ -747,3 +747,7 @@ input:focus, select:focus, textarea:focus{ border-color:#2a6f82 !important; box-
     box-shadow: inset -1px 0 0 var(--border);
 }
 #timesheet-table thead .ts-name, #timesheet-table thead .ts-shift { z-index: 3; background: var(--bg); }
+
+/* Gridline cho bảng chấm công (dễ nhìn như Excel) */
+#timesheet-table { border-collapse: separate; border-spacing: 0; }
+#timesheet-table th, #timesheet-table td { border: 1px solid #dfe4e6; }

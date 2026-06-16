@@ -2593,10 +2593,27 @@ async function loadPayroll() {
                 a: new Set((r.afternoon || []).map(Number)),
             };
         });
+        // Tự điền chấm công từ ca đã mở: ai mở ca buổi nào (sáng/chiều theo giờ mở) → đánh dấu buổi đó
+        try {
+            const shifts = await api.get('/api/shifts?limit=2000');
+            (shifts || []).forEach(sh => {
+                if (!sh.staff_id || !sh.open_time) return;
+                const dt = new Date(sh.open_time);
+                if (isNaN(dt.getTime())) return;
+                const ym = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+                if (ym !== period) return;
+                const st = PR.state[sh.staff_id];
+                if (!st) return;
+                st[dt.getHours() < 12 ? 'm' : 'a'].add(dt.getDate());
+            });
+        } catch (e) { /* không lấy được ca thì bỏ qua, vẫn hiện bảng thủ công */ }
         renderTimesheet();
         renderSalary();
     } catch (e) { toast(e.message, 'error'); }
 }
+
+// Màu tô theo buổi: Sáng = xanh da trời sáng, Chiều = vàng
+const TS_COLORS = { m: { bg: '#cfeaff', fg: '#0b5c9c' }, a: { bg: '#ffe680', fg: '#7a5c00' } };
 
 function renderTimesheet() {
     const ndays = daysInPeriod(PR.period);
@@ -2614,8 +2631,9 @@ function renderTimesheet() {
     const cell = (sid, sess, d) => {
         const on = PR.state[sid][sess].has(d);
         const mark = sess === 'm' ? 's' : 'c';
-        const bg = on ? '#ffe680' : (weekend[d] ? '#f3f3f3' : '');
-        return '<td class="ts-cell" data-sid="' + sid + '" data-sess="' + sess + '" data-day="' + d + '" style="text-align:center;cursor:pointer;min-width:30px;font-weight:700;color:' + (on ? '#7a5c00' : 'inherit') + (bg ? ';background:' + bg : '') + '">' + (on ? mark : '') + '</td>';
+        const col = TS_COLORS[sess];
+        const bg = on ? col.bg : (weekend[d] ? '#f3f3f3' : '');
+        return '<td class="ts-cell" data-sid="' + sid + '" data-sess="' + sess + '" data-day="' + d + '" style="text-align:center;cursor:pointer;min-width:30px;font-weight:700;color:' + (on ? col.fg : 'inherit') + (bg ? ';background:' + bg : '') + '">' + (on ? mark : '') + '</td>';
     };
     body.innerHTML = PR.staff.map(s => {
         let r1 = '<tr><td rowspan="2" class="ts-name" style="font-weight:600;vertical-align:middle">' + s.name + '</td><td class="ts-shift">Sáng</td>';
@@ -2632,7 +2650,7 @@ function toggleTsCell(cell) {
     const [y, mo] = PR.period.split('-').map(Number);
     const wd = new Date(y, mo - 1, d).getDay(); const we = (wd === 0 || wd === 6);
     if (set.has(d)) { set.delete(d); cell.textContent = ''; cell.style.background = we ? '#f3f3f3' : ''; cell.style.color = 'inherit'; }
-    else { set.add(d); cell.textContent = (sess === 'm' ? 's' : 'c'); cell.style.background = '#ffe680'; cell.style.color = '#7a5c00'; }
+    else { set.add(d); cell.textContent = (sess === 'm' ? 's' : 'c'); const col = TS_COLORS[sess]; cell.style.background = col.bg; cell.style.color = col.fg; }
     updateSalaryRow(sid);
 }
 

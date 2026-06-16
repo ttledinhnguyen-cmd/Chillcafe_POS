@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Chill POS">
     <link rel="apple-touch-icon" href="/picture/pwa/apple-touch-icon.png">
-    <link rel="stylesheet" href="/pos/style.css?v=66">
+    <link rel="stylesheet" href="/pos/style.css?v=67">
     <!-- Layout guarantee inline (served no-cache) so a stale CDN-cached style.css can't break full-width tables/grids on desktop -->
     <style id="layout-guarantee">
     @media (min-width: 769px) {
@@ -32,7 +32,7 @@
         #payroll-table tfoot { display: table-footer-group !important; }
         #payroll-table tr, #timesheet-table tr { display: table-row !important; background: none !important; border: none !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; border-radius: 0 !important; }
         #payroll-table th, #payroll-table td, #timesheet-table th, #timesheet-table td { display: table-cell !important; border: none !important; border-bottom: 1px solid var(--border) !important; padding: 8px 6px !important; font-size: 12px !important; text-align: left !important; white-space: nowrap; }
-        #timesheet-table th, #timesheet-table td { padding: 4px !important; }
+        #timesheet-table th, #timesheet-table td { padding: 4px !important; border: 1px solid #dfe4e6 !important; }
         #payroll-table td:first-child { font-weight: 600; }
         #payroll-table input, #payroll-table select { width: 84px !important; font-size: 12px !important; }
         #payroll-table .pr-note { width: 110px !important; }
@@ -329,7 +329,7 @@
                 </div>
                 <div class="card">
                     <h3 style="margin:0 0 6px">Chấm công</h3>
-                    <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px">Bấm vào ô để đánh dấu: dòng <b>Sáng</b> → "s", dòng <b>Chiều</b> → "c" (tô vàng). Bấm lại để bỏ. Số buổi tự cộng sang bảng lương.</p>
+                    <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px">Bấm vào ô để đánh dấu: dòng <b>Sáng</b> → "s" (tô xanh), dòng <b>Chiều</b> → "c" (tô vàng). Bấm lại để bỏ. Khi nhân viên mở ca, buổi đó tự được đánh dấu. Số buổi tự cộng sang bảng lương.</p>
                     <div style="overflow-x:auto">
                         <table class="data-table timesheet" id="timesheet-table">
                             <thead></thead>
@@ -693,6 +693,6 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-    <script src="/pos/script.js?v=71"></script>
+    <script src="/pos/script.js?v=72"></script>
 </body>
 </html>
