@@ -429,6 +429,19 @@
                             <button type="submit" class="btn btn-primary">Lưu</button>
                         </form>
                     </div>
+                    <div class="card" data-perm="notify.manage">
+                        <h3>Thông báo đẩy</h3>
+                        <p style="font-size:13px;color:var(--text-muted);margin:0 0 12px">Nhận thông báo về máy kể cả khi đóng app. Trên iPhone cần "Thêm vào màn hình chính" rồi mở từ đó.</p>
+                        <button type="button" class="btn btn-primary" id="push-enable-btn">Bật thông báo trên thiết bị này</button>
+                        <div id="push-status" style="font-size:13px;margin:10px 0;color:var(--text-muted)"></div>
+                        <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:12px">
+                            <div style="font-size:13px;font-weight:600;margin-bottom:8px">Gửi thông báo khi:</div>
+                            <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:14px"><input type="checkbox" id="notify_new_order"> Đơn mới / thanh toán</label>
+                            <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:14px"><input type="checkbox" id="notify_shift"> Mở / đóng ca</label>
+                            <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:14px"><input type="checkbox" id="notify_low_stock"> Nguyên liệu sắp hết</label>
+                            <button type="button" class="btn btn-primary" id="notify-save-btn">Lưu loại thông báo</button>
+                        </div>
+                    </div>
                     <div class="card">
                         <h3>Thanh toán / Chuyển khoản</h3>
                         <form id="bank-form">
@@ -693,6 +706,6 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-    <script src="/pos/script.js?v=74"></script>
+    <script src="/pos/script.js?v=75"></script>
 </body>
 </html>

@@ -210,6 +210,7 @@ const PERMISSION_CATALOG = [
     { group: 'Nhân viên', perms: [{ key: 'staff.view', label: 'Xem nhân viên' }, { key: 'staff.edit', label: 'Thêm/sửa nhân viên' }, { key: 'staff.delete', label: 'Xóa nhân viên' }] },
     { group: 'Bảng lương', perms: [{ key: 'payroll.view', label: 'Xem bảng lương' }, { key: 'payroll.edit', label: 'Sửa/lưu bảng lương' }] },
     { group: 'Báo cáo', perms: [{ key: 'report.view', label: 'Xem báo cáo' }] },
+    { group: 'Thông báo', perms: [{ key: 'notify.manage', label: 'Quản lý thông báo đẩy' }] },
 ];
 const ALL_PERMS = PERMISSION_CATALOG.flatMap(g => g.perms.map(p => p.key));
 const DEFAULT_ROLE_PERMS = {
@@ -1393,6 +1394,7 @@ app.post('/api/orders', requireAuth, (req, res) => {
 
     auditLog(req.session.userId, 'ORDER_CREATED', `#${orderId} - ${total}đ`, req.ip);
     broadcastSSE({ type: 'order_created', orderId, tableId: table_id, tableName, total, by: req.session.displayName });
+    sendPushAll('notify_new_order', { title: 'Đơn hàng mới', body: (tableName ? tableName + ' • ' : '') + (Number(total) || 0).toLocaleString('vi-VN') + 'đ', url: '/pos/' });
     res.json({ success: true, id: orderId, total, subtotal, discountAmount });
 });
 
@@ -1492,6 +1494,7 @@ app.post('/api/orders/:id/pay', requireAuth, (req, res) => {
 
     auditLog(req.session.userId, 'ORDER_PAID', `#${req.params.id} - ${invoiceNumber} - ${order.total}đ (${payment_method})`, req.ip);
     broadcastSSE({ type: 'order_paid', orderId: req.params.id, tableId: order.table_id, invoiceNumber, total: order.total, by: req.session.displayName });
+    sendPushAll('notify_new_order', { title: 'Đã thanh toán ' + (invoiceNumber || ''), body: (Number(order.total) || 0).toLocaleString('vi-VN') + 'đ' + (req.session.displayName ? ' • ' + req.session.displayName : ''), url: '/pos/' });
 
     // Get settings for receipt
     const settingsRows = db.prepare('SELECT * FROM settings').all();
@@ -1644,6 +1647,7 @@ app.post('/api/shifts/open', requireAuth, (req, res) => {
     if (sid) db.prepare('INSERT OR IGNORE INTO shift_staff (shift_id, staff_id, staff_name) VALUES (?, ?, ?)').run(shift.id, sid, staff_name);
 
     auditLog(req.session.userId, 'SHIFT_OPENED', `${code} - ${staff_name}`, req.ip);
+    sendPushAll('notify_shift', { title: 'Mở ca', body: staff_name + ' đã mở ca ' + code, url: '/pos/' });
     res.json({ success: true, shift });
 });
 
@@ -1700,6 +1704,7 @@ app.post('/api/shifts/:id/close', requireAuth, (req, res) => {
         .run('closed', now, finalAmount, sanitize(note || shift.note || ''), req.params.id);
 
     auditLog(req.session.userId, 'SHIFT_CLOSED', `${shift.code} - Revenue: ${revenue}đ`, req.ip);
+    sendPushAll('notify_shift', { title: 'Đóng ca', body: (shift.staff_name || '') + ' • Doanh thu ' + (Number(revenue) || 0).toLocaleString('vi-VN') + 'đ', url: '/pos/' });
     res.json({
         success: true,
         summary: {
@@ -1784,6 +1789,9 @@ app.post('/api/inventory', requirePerm('inventory.edit'), (req, res) => {
         db.prepare('INSERT INTO inventory (id, name, qty, unit, min_qty, cost_price) VALUES (?, ?, ?, ?, ?, ?)')
             .run(newId, sanitize(name), parseFloat(qty), sanitize(unit), parseFloat(min_qty), parseInt(cost_price) || 0);
         auditLog(req.session.userId, 'INVENTORY_CREATED', `${name} (${newId})`, req.ip);
+    }
+    if (parseFloat(qty) <= parseFloat(min_qty)) {
+        sendPushAll('notify_low_stock', { title: 'Nguyên liệu sắp hết', body: sanitize(name) + ' còn ' + parseFloat(qty) + ' ' + sanitize(unit) + ' (≤ ' + parseFloat(min_qty) + ')', url: '/pos/' });
     }
     res.json({ success: true });
 });
@@ -1878,7 +1886,7 @@ app.get('/api/settings', requireAuth, (req, res) => {
 });
 
 app.put('/api/settings', requireRole('admin'), (req, res) => {
-    const allowedKeys = ['name', 'address', 'phone', 'hours', 'facebook', 'invoice_prefix', 'bank_name', 'bank_account', 'bank_owner', 'payment_qr_url', 'google_client_id', 'printer_ip', 'printer_port', 'shop_lat', 'shop_lng', 'geo_restrict', 'geo_radius', 'tax_id'];
+    const allowedKeys = ['name', 'address', 'phone', 'hours', 'facebook', 'invoice_prefix', 'bank_name', 'bank_account', 'bank_owner', 'payment_qr_url', 'google_client_id', 'printer_ip', 'printer_port', 'shop_lat', 'shop_lng', 'geo_restrict', 'geo_radius', 'tax_id', 'notify_new_order', 'notify_shift', 'notify_low_stock'];
     const upsert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
     const updateMany = db.transaction(() => {
         for (const key of allowedKeys) {
@@ -2059,6 +2067,57 @@ function broadcastSSE(data) {
         try { client.write(msg); } catch (e) { sseClients.delete(client); }
     }
 }
+
+// ===== WEB PUSH (thông báo đẩy đến máy, kể cả khi đóng app) =====
+const webpush = require('web-push');
+let VAPID = null;
+try {
+    const vpath = path.join(__dirname, 'data', 'vapid.json');
+    if (fs.existsSync(vpath)) { VAPID = JSON.parse(fs.readFileSync(vpath, 'utf8')); }
+    else { VAPID = webpush.generateVAPIDKeys(); fs.writeFileSync(vpath, JSON.stringify(VAPID, null, 2)); console.log('Generated VAPID keys'); }
+    webpush.setVapidDetails('mailto:admin@hakicafe.com', VAPID.publicKey, VAPID.privateKey);
+} catch (e) { console.error('VAPID init error:', e.message); }
+
+try {
+    db.exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+        endpoint TEXT PRIMARY KEY,
+        sub TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now'))
+    )`);
+} catch (e) { console.error('push_subscriptions table error:', e.message); }
+
+function notifyOn(key) {
+    try { return db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value === 'on'; } catch (e) { return false; }
+}
+function sendPushAll(settingKey, payload) {
+    if (settingKey && !notifyOn(settingKey)) return;
+    if (!VAPID) return;
+    let subs = [];
+    try { subs = db.prepare('SELECT endpoint, sub FROM push_subscriptions').all(); } catch (e) { return; }
+    const data = JSON.stringify(payload);
+    for (const row of subs) {
+        let s; try { s = JSON.parse(row.sub); } catch (e) { continue; }
+        webpush.sendNotification(s, data).catch(err => {
+            if (err && (err.statusCode === 404 || err.statusCode === 410)) {
+                try { db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(row.endpoint); } catch (e2) {}
+            }
+        });
+    }
+}
+
+app.get('/api/push/key', requireAuth, (req, res) => res.json({ key: VAPID ? VAPID.publicKey : null }));
+app.post('/api/push/subscribe', requireAuth, (req, res) => {
+    const sub = req.body && req.body.subscription;
+    if (!sub || !sub.endpoint) return res.status(400).json({ error: 'Subscription không hợp lệ' });
+    try { db.prepare('INSERT OR REPLACE INTO push_subscriptions (endpoint, sub) VALUES (?, ?)').run(sub.endpoint, JSON.stringify(sub)); }
+    catch (e) { return res.status(500).json({ error: 'Lỗi server' }); }
+    res.json({ success: true });
+});
+app.post('/api/push/unsubscribe', requireAuth, (req, res) => {
+    const ep = req.body && req.body.endpoint;
+    if (ep) { try { db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(ep); } catch (e) {} }
+    res.json({ success: true });
+});
 
 // ===== TABLE ORDERS API (persistent pending orders) =====
 app.get('/api/table-orders', requireAuth, (req, res) => {

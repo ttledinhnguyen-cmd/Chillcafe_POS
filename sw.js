@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'chill-cafe-v2';
+const CACHE_VERSION = 'chill-cafe-v3';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -64,6 +64,35 @@ self.addEventListener('fetch', (event) => {
         }
         return res;
       }).catch(() => cached);
+    })
+  );
+});
+
+// ===== WEB PUSH: nhận thông báo đẩy từ server =====
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; }
+  catch (e) { data = { title: 'HAKI POS', body: event.data ? event.data.text() : '' }; }
+  const title = data.title || 'HAKI POS';
+  const options = {
+    body: data.body || '',
+    icon: '/picture/pwa/icon-192.png',
+    badge: '/picture/pwa/icon-192.png',
+    data: { url: data.url || '/pos/' },
+    vibrate: [80, 40, 80]
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || '/pos/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if (c.url.includes('/pos') && 'focus' in c) return c.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(target);
     })
   );
 });

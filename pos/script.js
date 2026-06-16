@@ -3137,8 +3137,70 @@ async function loadSettings() {
                 $('#shop-location-info').innerHTML = '<svg class="ico" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><path d="M12 17h.01"/></svg> Chưa thiết lập vị trí quán';
             }
         }
+        // Thông báo đẩy
+        if ($('#notify_new_order')) $('#notify_new_order').checked = s.notify_new_order === 'on';
+        if ($('#notify_shift')) $('#notify_shift').checked = s.notify_shift === 'on';
+        if ($('#notify_low_stock')) $('#notify_low_stock').checked = s.notify_low_stock === 'on';
+        updatePushStatus();
     } catch (err) { toast(err.message, 'error'); }
 }
+
+// ===== THÔNG BÁO ĐẨY (Web Push) =====
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    const arr = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return arr;
+}
+const pushSupported = () => ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+
+async function updatePushStatus() {
+    const el = document.getElementById('push-status'); if (!el) return;
+    if (!pushSupported()) { el.textContent = '⚠️ Trình duyệt/thiết bị này không hỗ trợ thông báo đẩy. (iPhone: hãy mở app từ màn hình chính)'; return; }
+    try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        const sub = reg ? await reg.pushManager.getSubscription() : null;
+        if (Notification.permission === 'denied') el.textContent = '🔕 Đã chặn thông báo cho trang này — bật lại trong cài đặt trình duyệt.';
+        else if (sub) el.textContent = '✅ Đã bật thông báo trên thiết bị này.';
+        else el.textContent = 'Chưa bật trên thiết bị này.';
+    } catch (e) { el.textContent = ''; }
+}
+
+async function enablePush() {
+    const btn = document.getElementById('push-enable-btn');
+    if (!pushSupported()) { toast('Thiết bị/trình duyệt không hỗ trợ thông báo đẩy', 'error'); return; }
+    if (btn) btn.disabled = true;
+    try {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') { toast('Bạn chưa cho phép thông báo', 'error'); return; }
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+        const res = await api.get('/api/push/key');
+        if (!res || !res.key) { toast('Server chưa sẵn sàng (cần khởi động lại node để bật push)', 'error'); return; }
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(res.key) });
+        await api.post('/api/push/subscribe', { subscription: sub });
+        toast('Đã bật thông báo trên thiết bị này');
+    } catch (e) { toast('Lỗi bật thông báo: ' + (e.message || ''), 'error'); }
+    finally { if (btn) btn.disabled = false; updatePushStatus(); }
+}
+
+$('#push-enable-btn')?.addEventListener('click', enablePush);
+$('#notify-save-btn')?.addEventListener('click', async () => {
+    try {
+        await api.put('/api/settings', {
+            notify_new_order: $('#notify_new_order').checked ? 'on' : 'off',
+            notify_shift: $('#notify_shift').checked ? 'on' : 'off',
+            notify_low_stock: $('#notify_low_stock').checked ? 'on' : 'off',
+        });
+        toast('Đã lưu loại thông báo');
+    } catch (e) { toast(e.message, 'error'); }
+});
+
+// Đăng ký service worker (PWA + nhận push)
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(() => {}); }
 
 $('#printer-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
