@@ -666,7 +666,7 @@ function renderPOSTables(fullRebuild) {
         if (named) {
             grid.classList.add('has-floors');
             grid.innerHTML = groups.map(g =>
-                `<div class="floor-section"><div class="floor-header">${escapeHtmlSafe(g.name) || 'Chưa phân tầng'}</div>` +
+                `<div class="floor-section"><div class="floor-header">${escapeHtmlSafe(g.name) || 'Chưa phân khu vực'}</div>` +
                 `<div class="table-grid">` +
                 g.tables.map(t => `<div class="table-card" data-id="${t.id}"><div class="table-name">${t.name}</div><div class="table-info"></div></div>`).join('') +
                 `</div></div>`
@@ -1471,39 +1471,123 @@ function nativeSunmiPrint() {
 }
 
 // ===== TABLES PAGE =====
+const DRAG_GRIP_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg>';
+
 async function loadTables() {
     try {
         const tables = await api.get('/api/tables');
         App.tables = tables;
+        App.extraFloors = App.extraFloors || [];
         const grid = $('#tables-grid');
         const groups = groupTablesByFloor(tables);
-        const named = groups.some(g => g.name);
+        // Bỏ các tầng "thêm tay" đã có bàn thật (đã hiện trong groups)
+        const realNames = new Set(groups.map(g => g.name));
+        App.extraFloors = App.extraFloors.filter(f => !realNames.has(f));
+        const allGroups = groups.concat(App.extraFloors.map(f => ({ name: f, tables: [] })));
+
         const cardHtml = t =>
-            `<div class="table-card ${t.status}">
+            `<div class="table-card ${t.status}" data-id="${t.id}" data-area="${escapeHtmlSafe((t.area || '').trim())}">
+                <span class="drag-handle" title="Kéo để đổi khu vực">${DRAG_GRIP_SVG}</span>
                 <div class="table-name">${t.name}</div>
                 <div class="table-status">${statusBadge(t.status)}</div>
-                <div style="margin-top:8px;display:flex;gap:4px;justify-content:center">
+                <div class="table-card-actions">
                     <button class="btn btn-sm" onclick="editTable(${t.id},'${t.name.replace(/'/g, "\\'")}','${(t.area || '').replace(/'/g, "\\'")}')">Sửa</button>
                     <button class="btn btn-sm btn-danger" onclick="deleteTable(${t.id})">Xóa</button>
                 </div>
             </div>`;
-        if (named) {
-            grid.classList.add('has-floors');
-            grid.innerHTML = groups.map(g =>
-                `<div class="floor-section"><div class="floor-header">${escapeHtmlSafe(g.name) || 'Chưa phân tầng'}</div>` +
-                `<div class="table-grid">${g.tables.map(cardHtml).join('')}</div></div>`
-            ).join('');
-        } else {
-            grid.classList.remove('has-floors');
-            grid.innerHTML = tables.map(cardHtml).join('');
-        }
+
+        grid.classList.add('has-floors');
+        grid.innerHTML = allGroups.map(g => {
+            const cards = g.tables.map(cardHtml).join('');
+            const empty = g.tables.length ? '' : '<div class="floor-empty-hint">Kéo bàn vào đây để thêm vào khu vực này</div>';
+            return `<div class="floor-section">
+                <div class="floor-header">${escapeHtmlSafe(g.name) || 'Chưa phân khu vực'} <span style="font-weight:400;color:#9aa3a7;font-size:12px">(${g.tables.length})</span></div>
+                <div class="table-grid floor-drop" data-floor="${escapeHtmlSafe(g.name)}">${cards}${empty}</div>
+            </div>`;
+        }).join('');
+        setupTableDnD();
     } catch (err) { toast(err.message, 'error'); }
+}
+
+window.addFloorPrompt = () => {
+    const name = (prompt('Tên khu vực mới (VD: Tầng 1, Sân thượng, Khu VIP):') || '').trim();
+    if (!name) return;
+    App.extraFloors = App.extraFloors || [];
+    const exists = groupTablesByFloor(App.tables).some(g => g.name === name) || App.extraFloors.includes(name);
+    if (exists) { toast('Khu vực này đã có rồi'); return; }
+    App.extraFloors.push(name);
+    loadTables();
+    toast(`Đã thêm khu vực "${name}" — kéo bàn vào để dùng`);
+};
+$('#add-floor-btn')?.addEventListener('click', addFloorPrompt);
+
+// Kéo-thả bàn giữa các tầng (chuột + cảm ứng, qua Pointer Events)
+function setupTableDnD() {
+    if (App._tableDnDInit) return;
+    App._tableDnDInit = true;
+    let drag = null;
+    const clearTargets = () => document.querySelectorAll('.floor-drop.drop-target').forEach(z => z.classList.remove('drop-target'));
+
+    document.addEventListener('pointerdown', (e) => {
+        const handle = e.target.closest('#tables-grid .drag-handle');
+        if (!handle) return;
+        const card = handle.closest('.table-card');
+        if (!card) return;
+        e.preventDefault();
+        drag = { id: parseInt(card.dataset.id), card, fromArea: card.dataset.area || '', startX: e.clientX, startY: e.clientY, active: false, clone: null };
+    });
+
+    document.addEventListener('pointermove', (e) => {
+        if (!drag) return;
+        if (!drag.active) {
+            if (Math.abs(e.clientX - drag.startX) < 6 && Math.abs(e.clientY - drag.startY) < 6) return;
+            drag.active = true;
+            const rect = drag.card.getBoundingClientRect();
+            const clone = drag.card.cloneNode(true);
+            clone.classList.add('table-drag-clone');
+            clone.style.width = rect.width + 'px';
+            document.body.appendChild(clone);
+            drag.clone = clone;
+            drag.card.classList.add('dragging');
+        }
+        drag.clone.style.left = e.clientX + 'px';
+        drag.clone.style.top = e.clientY + 'px';
+        clearTargets();
+        const zone = document.elementFromPoint(e.clientX, e.clientY)?.closest('.floor-drop');
+        if (zone) zone.classList.add('drop-target');
+    });
+
+    const finish = async (e) => {
+        if (!drag) return;
+        const d = drag; drag = null;
+        if (!d.active) return;
+        const zone = document.elementFromPoint(e.clientX, e.clientY)?.closest('.floor-drop');
+        d.clone?.remove();
+        d.card.classList.remove('dragging');
+        clearTargets();
+        if (!zone) return;
+        const target = zone.dataset.floor || '';
+        if (target === d.fromArea) return;
+        try {
+            await api.put(`/api/tables/${d.id}`, { area: target });
+            toast(`Đã chuyển bàn sang "${target || 'Chưa phân khu vực'}"`);
+            await loadTables();
+        } catch (err) { toast(err.message, 'error'); }
+    };
+    document.addEventListener('pointerup', finish);
+    document.addEventListener('pointercancel', () => {
+        if (!drag) return;
+        drag.clone?.remove();
+        drag.card?.classList.remove('dragging');
+        clearTargets();
+        drag = null;
+    });
 }
 
 $('#add-table-btn').addEventListener('click', () => {
     showFormModal('Thêm bàn', [
         { key: 'name', label: 'Tên bàn', type: 'text', required: true },
-        { key: 'area', label: 'Tầng / Khu vực', type: 'datalist', options: existingFloors(), placeholder: 'VD: Tầng 1, Tầng 2, Sân thượng...' },
+        { key: 'area', label: 'Khu vực', type: 'datalist', options: existingFloors(), placeholder: 'VD: Tầng 1, Tầng 2, Sân thượng...' },
     ], async (data) => {
         await api.post('/api/tables', data);
         toast('Đã thêm bàn');
@@ -1514,7 +1598,7 @@ $('#add-table-btn').addEventListener('click', () => {
 window.editTable = (id, name, area) => {
     showFormModal('Sửa bàn', [
         { key: 'name', label: 'Tên bàn', type: 'text', value: name, required: true },
-        { key: 'area', label: 'Tầng / Khu vực', type: 'datalist', value: area, options: existingFloors(), placeholder: 'VD: Tầng 1, Tầng 2, Sân thượng...' },
+        { key: 'area', label: 'Khu vực', type: 'datalist', value: area, options: existingFloors(), placeholder: 'VD: Tầng 1, Tầng 2, Sân thượng...' },
     ], async (data) => {
         await api.put(`/api/tables/${id}`, data);
         toast('Đã cập nhật bàn');
@@ -1527,6 +1611,57 @@ window.deleteTable = async (id) => {
     try { await api.del(`/api/tables/${id}`); toast('Đã xóa bàn'); loadTables(); }
     catch (err) { toast(err.message, 'error'); }
 };
+
+// ===== QUẢN LÝ TẦNG / KHU VỰC =====
+async function openFloorManager() {
+    try {
+        App.tables = await api.get('/api/tables');
+        renderFloorManager();
+        openModal('modal-floors');
+    } catch (err) { toast(err.message, 'error'); }
+}
+
+function renderFloorManager() {
+    const wrap = $('#floors-list');
+    if (!wrap) return;
+    const groups = groupTablesByFloor(App.tables);
+    if (!groups.length) { wrap.innerHTML = '<p style="color:#666">Chưa có bàn nào.</p>'; return; }
+    wrap.innerHTML = groups.map(g => {
+        const isEmpty = !g.name;
+        return `<div class="floor-row" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <input type="text" class="floor-input" data-old="${encodeURIComponent(g.name)}" value="${escapeHtmlSafe(g.name)}" placeholder="${isEmpty ? 'Đặt tên cho bàn chưa phân khu vực' : ''}" style="flex:1;min-width:0">
+            <span style="font-size:12px;color:#888;white-space:nowrap">${g.tables.length} bàn</span>
+            <button class="btn btn-sm btn-primary" onclick="saveFloorRename(this)">Đổi tên</button>
+        </div>`;
+    }).join('');
+}
+
+window.saveFloorRename = async (btn) => {
+    const row = btn.closest('.floor-row');
+    const input = row?.querySelector('.floor-input');
+    if (!input) return;
+    const oldName = decodeURIComponent(input.dataset.old || '');
+    const newName = input.value.trim();
+    if (newName === oldName) { toast('Tên không thay đổi'); return; }
+    const affected = (App.tables || []).filter(t => (t.area || '').trim() === oldName);
+    if (!affected.length) return;
+    btn.disabled = true;
+    try {
+        for (const t of affected) {
+            await api.put(`/api/tables/${t.id}`, { area: newName });
+        }
+        toast(`Đã đổi "${oldName || 'Chưa phân khu vực'}" → "${newName || 'Chưa phân khu vực'}" (${affected.length} bàn)`);
+        App.tables = await api.get('/api/tables');
+        renderFloorManager();
+        if ($('#page-tables')?.classList.contains('active')) loadTables();
+    } catch (err) {
+        toast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+};
+
+$('#manage-floors-btn')?.addEventListener('click', openFloorManager);
 
 // ===== ORDERS PAGE =====
 async function loadOrders() {
@@ -2365,7 +2500,7 @@ function renderTimesheet() {
     const head = document.querySelector('#timesheet-table thead');
     const body = document.querySelector('#timesheet-table tbody');
     const weekend = {};
-    let h = '<tr><th style="position:sticky;left:0;background:var(--bg);z-index:3;min-width:90px">Nhân viên</th><th style="min-width:54px">Buổi</th>';
+    let h = '<tr><th class="ts-name">Nhân viên</th><th class="ts-shift">Buổi</th>';
     for (let d = 1; d <= ndays; d++) {
         const wd = new Date(y, mo - 1, d).getDay();
         const we = (wd === 0 || wd === 6); if (we) weekend[d] = 1;
@@ -2379,9 +2514,9 @@ function renderTimesheet() {
         return '<td class="ts-cell" data-sid="' + sid + '" data-sess="' + sess + '" data-day="' + d + '" style="text-align:center;cursor:pointer;min-width:30px;font-weight:700;color:' + (on ? '#7a5c00' : 'inherit') + (bg ? ';background:' + bg : '') + '">' + (on ? mark : '') + '</td>';
     };
     body.innerHTML = PR.staff.map(s => {
-        let r1 = '<tr><td rowspan="2" style="position:sticky;left:0;background:#fff;z-index:1;font-weight:600;vertical-align:middle">' + s.name + '</td><td>Sáng</td>';
+        let r1 = '<tr><td rowspan="2" class="ts-name" style="font-weight:600;vertical-align:middle">' + s.name + '</td><td class="ts-shift">Sáng</td>';
         for (let d = 1; d <= ndays; d++) r1 += cell(s.id, 'm', d);
-        let r2 = '</tr><tr><td>Chiều</td>';
+        let r2 = '</tr><tr><td class="ts-shift">Chiều</td>';
         for (let d = 1; d <= ndays; d++) r2 += cell(s.id, 'a', d);
         return r1 + r2 + '</tr>';
     }).join('');

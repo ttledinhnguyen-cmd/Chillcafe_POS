@@ -205,6 +205,39 @@ a { color: var(--primary); text-decoration: none; }
 .floor-header::before {
     content: ''; width: 4px; height: 16px; border-radius: 2px; background: var(--primary);
 }
+/* Trang Quản lý bàn: thẻ đều nhau + kéo-thả đổi khu vực */
+#tables-grid .table-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important; gap: 10px; }
+#tables-grid .table-card {
+    position: relative; display: flex; flex-direction: column; align-items: stretch;
+    padding: 30px 10px 12px; gap: 6px; text-align: center;
+}
+#tables-grid .table-card .table-name {
+    padding: 0 4px; min-height: 2.6em;
+    display: flex; align-items: center; justify-content: center;
+    overflow-wrap: anywhere;
+}
+#tables-grid .table-card .table-status { margin: 0; }
+#tables-grid .table-card-actions { margin-top: auto; display: flex; gap: 6px; justify-content: center; padding-top: 4px; }
+#tables-grid .table-card-actions .btn { flex: 1; min-width: 0; }
+#tables-grid .drag-handle {
+    position: absolute; top: 7px; right: 7px; color: #b3bcc0; cursor: grab;
+    padding: 2px; line-height: 0; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+#tables-grid .drag-handle:hover { color: var(--primary); }
+#tables-grid .drag-handle svg { width: 18px; height: 18px; display: block; pointer-events: none; }
+.table-card.dragging { opacity: .35; }
+.floor-drop.drop-target {
+    outline: 2px dashed var(--primary); outline-offset: 4px; border-radius: 8px;
+    background: rgba(42, 111, 130, .06);
+}
+.floor-empty-hint {
+    grid-column: 1 / -1; color: #9aa3a7; font-size: 13px; padding: 18px; text-align: center;
+    border: 2px dashed var(--border); border-radius: 8px;
+}
+.table-drag-clone {
+    position: fixed; z-index: 9999; pointer-events: none; opacity: .9;
+    transform: translate(-50%, -50%); box-shadow: 0 10px 28px rgba(0, 0, 0, .22); margin: 0;
+}
 .table-card {
     background: white; border-radius: var(--radius); padding: 16px; text-align: center;
     cursor: pointer; border: 2px solid var(--border); transition: all 0.2s; box-shadow: var(--shadow);
@@ -692,3 +725,18 @@ input:focus, select:focus, textarea:focus{ border-color:#2a6f82 !important; box-
   .page.active, .modal.active .modal-header, .modal.active .modal-body, .modal.active .modal-footer{ animation: none; }
   .sidebar-menu li, .btn, .card, .stat-card, .menu-item, .table-card, .cat-tab, .data-table tbody tr{ transition: none; }
 }
+
+/* Bảng chấm công: cố định 2 cột Nhân viên + Buổi khi cuộn ngang */
+#timesheet-table { overflow: visible; }
+#timesheet-table .ts-name {
+    position: sticky; left: 0; z-index: 2; background: #fff;
+    width: 88px; min-width: 88px; max-width: 88px;
+    overflow: hidden; text-overflow: ellipsis;
+    box-shadow: inset -1px 0 0 var(--border);
+}
+#timesheet-table .ts-shift {
+    position: sticky; left: 88px; z-index: 2; background: #fff;
+    width: 52px; min-width: 52px; max-width: 52px;
+    box-shadow: inset -1px 0 0 var(--border);
+}
+#timesheet-table thead .ts-name, #timesheet-table thead .ts-shift { z-index: 3; background: var(--bg); }

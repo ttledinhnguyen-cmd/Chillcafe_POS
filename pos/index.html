@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Chill POS">
     <link rel="apple-touch-icon" href="/picture/pwa/apple-touch-icon.png">
-    <link rel="stylesheet" href="/pos/style.css?v=61">
+    <link rel="stylesheet" href="/pos/style.css?v=64">
     <!-- Layout guarantee inline (served no-cache) so a stale CDN-cached style.css can't break full-width tables/grids on desktop -->
     <style id="layout-guarantee">
     @media (min-width: 769px) {
@@ -37,6 +37,8 @@
         #payroll-table input, #payroll-table select { width: 84px !important; font-size: 12px !important; }
         #payroll-table .pr-note { width: 110px !important; }
         .payroll-actions { width: 100%; flex-wrap: wrap; }
+        .payroll-actions .btn { flex: 0 0 auto; }
+        .payroll-actions .input-sm { flex: 1 1 140px; min-width: 140px; }
     }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -204,7 +206,11 @@
             <div class="page" id="page-tables">
                 <div class="page-header">
                     <h3>Quản lý bàn</h3>
-                    <button class="btn btn-primary" id="add-table-btn">+ Thêm bàn</button>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                        <button class="btn" id="manage-floors-btn" data-perm="table.manage">Quản lý khu vực</button>
+                        <button class="btn" id="add-floor-btn" data-perm="table.manage">+ Thêm khu vực</button>
+                        <button class="btn btn-primary" id="add-table-btn">+ Thêm bàn</button>
+                    </div>
                 </div>
                 <div class="table-grid" id="tables-grid"></div>
             </div>
@@ -669,11 +675,24 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="modal-floors" style="display:none">
+        <div class="modal">
+            <div class="modal-header"><h3>Quản lý khu vực</h3><button class="modal-close" data-close="modal-floors">&times;</button></div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:#666;margin:0 0 12px">Đổi tên một khu vực sẽ áp dụng cho <b>tất cả bàn</b> thuộc khu vực đó. Đặt trùng tên với khu vực khác = gộp hai khu vực. Để chuyển từng bàn sang khu vực khác, dùng nút <b>Sửa</b> ở mỗi bàn hoặc kéo-thả.</p>
+                <div id="floors-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" data-close="modal-floors">Đóng</button>
+            </div>
+        </div>
+    </div>
+
     <!-- TOAST -->
     <div id="toast-container" class="toast-container"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-    <script src="/pos/script.js?v=64"></script>
+    <script src="/pos/script.js?v=69"></script>
 </body>
 </html>
