@@ -193,6 +193,18 @@ a { color: var(--primary); text-decoration: none; }
 
 /* Table grid */
 .table-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+/* Nhóm bàn theo tầng/khu vực */
+.table-grid.has-floors { display: block; }
+.floor-section { margin-bottom: 18px; }
+.floor-section:last-child { margin-bottom: 0; }
+.floor-header {
+    font-weight: 700; font-size: 14px; color: var(--primary-dark);
+    margin: 0 0 10px; padding: 4px 0 6px; border-bottom: 2px solid var(--border);
+    display: flex; align-items: center; gap: 6px;
+}
+.floor-header::before {
+    content: ''; width: 4px; height: 16px; border-radius: 2px; background: var(--primary);
+}
 .table-card {
     background: white; border-radius: var(--radius); padding: 16px; text-align: center;
     cursor: pointer; border: 2px solid var(--border); transition: all 0.2s; box-shadow: var(--shadow);
@@ -644,4 +656,39 @@ a { color: var(--primary); text-decoration: none; }
     .receipt .receipt-total { font-size: 13px; font-weight: 900; }
     .receipt .receipt-divider { border-top: 2px solid #000 !important; }
     .receipt .receipt-qr img { width: 40mm; }
+}
+
+/* ===== UI polish v47 (2026-06-11): hover & chuyển động mượt, an toàn cho cảm ứng ===== */
+.page.active{ animation: hakiFadeUp .22s ease; }
+@keyframes hakiFadeUp{ from{ opacity:0; transform: translateY(8px); } to{ opacity:1; transform:none; } }
+.modal.active .modal-header, .modal.active .modal-body, .modal.active .modal-footer{ animation: hakiPop .18s ease; }
+@keyframes hakiPop{ from{ opacity:0; transform: scale(.97); } to{ opacity:1; transform: scale(1); } }
+input:focus, select:focus, textarea:focus{ border-color:#2a6f82 !important; box-shadow: 0 0 0 3px rgba(42,111,130,.16) !important; outline: none; }
+.data-table tbody tr{ transition: background .12s ease; }
+.sidebar-menu li{ border-left: 3px solid transparent; }
+.sidebar-menu li.active{ border-left-color: #c89a4a; }
+
+/* Hover chỉ cho thiết bị có chuột — tránh hiệu ứng "dính" trên máy tính bảng cảm ứng */
+@media (hover: hover) and (pointer: fine){
+  .data-table tbody tr:hover{ background: #eef4f5; }
+  .sidebar-menu li{ transition: background .18s ease, transform .18s ease, border-color .18s ease; }
+  .sidebar-menu li:hover{ background: rgba(255,255,255,.07); border-left-color: #c89a4a; transform: translateX(3px); }
+  .btn{ transition: transform .15s ease, box-shadow .15s ease, filter .15s ease; }
+  .btn:hover{ transform: translateY(-1px); box-shadow: 0 4px 14px rgba(26,79,94,.22); filter: brightness(1.06); }
+  .btn:active{ transform: translateY(0); box-shadow: 0 1px 4px rgba(26,79,94,.18); }
+  .card, .stat-card{ transition: box-shadow .2s ease, transform .2s ease; }
+  .card:hover{ box-shadow: 0 6px 22px rgba(31,42,46,.09); }
+  .stat-card:hover{ transform: translateY(-3px); box-shadow: 0 10px 24px rgba(31,42,46,.12); }
+  .menu-item{ transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+  .menu-item:hover{ transform: translateY(-4px); box-shadow: 0 10px 22px rgba(31,42,46,.14); border-color: #c89a4a; }
+  .table-card{ transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+  .table-card:hover{ transform: translateY(-3px); box-shadow: 0 8px 20px rgba(26,79,94,.16); border-color: #2a6f82; }
+  .cat-tab{ transition: transform .14s ease, box-shadow .14s ease; }
+  .cat-tab:hover{ transform: translateY(-1px); box-shadow: 0 3px 10px rgba(31,42,46,.12); }
+}
+
+/* Tôn trọng cài đặt "giảm chuyển động" của hệ điều hành */
+@media (prefers-reduced-motion: reduce){
+  .page.active, .modal.active .modal-header, .modal.active .modal-body, .modal.active .modal-footer{ animation: none; }
+  .sidebar-menu li, .btn, .card, .stat-card, .menu-item, .table-card, .cat-tab, .data-table tbody tr{ transition: none; }
 }

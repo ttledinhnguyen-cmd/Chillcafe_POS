@@ -632,15 +632,49 @@ async function loadPOS() {
     }
 }
 
+// Nhóm bàn theo tầng/khu vực, giữ nguyên thứ tự xuất hiện
+function groupTablesByFloor(tables) {
+    const order = [];
+    const map = {};
+    (tables || []).forEach(t => {
+        const f = (t.area || '').trim();
+        if (!(f in map)) { map[f] = []; order.push(f); }
+        map[f].push(t);
+    });
+    return order.map(f => ({ name: f, tables: map[f] }));
+}
+
+// Danh sách tầng đang có (để gợi ý khi thêm/sửa bàn)
+function existingFloors() {
+    const set = new Set((App.tables || []).map(t => (t.area || '').trim()).filter(Boolean));
+    return [...set].sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }));
+}
+
 function renderPOSTables(fullRebuild) {
     show('#pos-step-tables');
     hide('#pos-step-menu');
     const mcb = $('#mobile-cart-bar'); if (mcb) mcb.style.display = 'none';
     const grid = $('#pos-tables');
 
-    // Full rebuild only when needed (first load, table list changes)
-    if (fullRebuild || !grid.children.length || grid.children.length !== App.tables.length) {
-        grid.innerHTML = App.tables.map(t => `<div class="table-card" data-id="${t.id}"><div class="table-name">${t.name}</div><div class="table-info"></div></div>`).join('');
+    const groups = groupTablesByFloor(App.tables);
+    const named = groups.some(g => g.name);
+    // Chữ ký cấu trúc: rebuild khi danh sách bàn hoặc phân tầng thay đổi
+    const sig = (named ? 'F' : 'N') + '|' + App.tables.map(t => t.id + ':' + (t.area || '')).join('|');
+
+    if (fullRebuild || grid.dataset.sig !== sig) {
+        grid.dataset.sig = sig;
+        if (named) {
+            grid.classList.add('has-floors');
+            grid.innerHTML = groups.map(g =>
+                `<div class="floor-section"><div class="floor-header">${escapeHtmlSafe(g.name) || 'Chưa phân tầng'}</div>` +
+                `<div class="table-grid">` +
+                g.tables.map(t => `<div class="table-card" data-id="${t.id}"><div class="table-name">${t.name}</div><div class="table-info"></div></div>`).join('') +
+                `</div></div>`
+            ).join('');
+        } else {
+            grid.classList.remove('has-floors');
+            grid.innerHTML = App.tables.map(t => `<div class="table-card" data-id="${t.id}"><div class="table-name">${t.name}</div><div class="table-info"></div></div>`).join('');
+        }
         // Event delegation - attach once
         grid.onclick = (e) => {
             const card = e.target.closest('.table-card');
@@ -1440,24 +1474,36 @@ function nativeSunmiPrint() {
 async function loadTables() {
     try {
         const tables = await api.get('/api/tables');
+        App.tables = tables;
         const grid = $('#tables-grid');
-        grid.innerHTML = tables.map(t =>
+        const groups = groupTablesByFloor(tables);
+        const named = groups.some(g => g.name);
+        const cardHtml = t =>
             `<div class="table-card ${t.status}">
                 <div class="table-name">${t.name}</div>
                 <div class="table-status">${statusBadge(t.status)}</div>
                 <div style="margin-top:8px;display:flex;gap:4px;justify-content:center">
-                    <button class="btn btn-sm" onclick="editTable(${t.id},'${t.name.replace(/'/g, "\\'")}','${t.area || ''}')">Sửa</button>
+                    <button class="btn btn-sm" onclick="editTable(${t.id},'${t.name.replace(/'/g, "\\'")}','${(t.area || '').replace(/'/g, "\\'")}')">Sửa</button>
                     <button class="btn btn-sm btn-danger" onclick="deleteTable(${t.id})">Xóa</button>
                 </div>
-            </div>`
-        ).join('');
+            </div>`;
+        if (named) {
+            grid.classList.add('has-floors');
+            grid.innerHTML = groups.map(g =>
+                `<div class="floor-section"><div class="floor-header">${escapeHtmlSafe(g.name) || 'Chưa phân tầng'}</div>` +
+                `<div class="table-grid">${g.tables.map(cardHtml).join('')}</div></div>`
+            ).join('');
+        } else {
+            grid.classList.remove('has-floors');
+            grid.innerHTML = tables.map(cardHtml).join('');
+        }
     } catch (err) { toast(err.message, 'error'); }
 }
 
 $('#add-table-btn').addEventListener('click', () => {
     showFormModal('Thêm bàn', [
         { key: 'name', label: 'Tên bàn', type: 'text', required: true },
-        { key: 'area', label: 'Khu vực', type: 'select', options: [['indoor', 'Trong nhà'], ['outdoor', 'Sân'], ['service', 'Dịch vụ']] },
+        { key: 'area', label: 'Tầng / Khu vực', type: 'datalist', options: existingFloors(), placeholder: 'VD: Tầng 1, Tầng 2, Sân thượng...' },
     ], async (data) => {
         await api.post('/api/tables', data);
         toast('Đã thêm bàn');
@@ -1468,7 +1514,7 @@ $('#add-table-btn').addEventListener('click', () => {
 window.editTable = (id, name, area) => {
     showFormModal('Sửa bàn', [
         { key: 'name', label: 'Tên bàn', type: 'text', value: name, required: true },
-        { key: 'area', label: 'Khu vực', type: 'select', value: area, options: [['indoor', 'Trong nhà'], ['outdoor', 'Sân'], ['service', 'Dịch vụ']] },
+        { key: 'area', label: 'Tầng / Khu vực', type: 'datalist', value: area, options: existingFloors(), placeholder: 'VD: Tầng 1, Tầng 2, Sân thượng...' },
     ], async (data) => {
         await api.put(`/api/tables/${id}`, data);
         toast('Đã cập nhật bàn');
@@ -2954,6 +3000,10 @@ function showFormModal(title, fields, onSave) {
             ).join('')}</select>`;
         } else if (f.type === 'textarea') {
             input = `<textarea id="form-${f.key}" name="${f.key}" rows="3">${f.value || ''}</textarea>`;
+        } else if (f.type === 'datalist') {
+            const listId = `dl-${f.key}`;
+            input = `<input type="text" id="form-${f.key}" name="${f.key}" list="${listId}" value="${f.value !== undefined ? f.value : ''}" placeholder="${f.placeholder || ''}" autocomplete="off">` +
+                `<datalist id="${listId}">${(f.options || []).map(o => `<option value="${escapeHtmlSafe(o)}"></option>`).join('')}</datalist>`;
         } else {
             input = `<input type="${f.type}" id="form-${f.key}" name="${f.key}" value="${f.value !== undefined ? f.value : ''}" ${f.required ? 'required' : ''}>`;
         }

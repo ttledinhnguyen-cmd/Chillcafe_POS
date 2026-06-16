@@ -47,3 +47,7 @@ build/
 *.iml
 local.properties
 captures/
+
+# Windows Explorer folder metadata (machine-specific, do not track)
+desktop.ini
+**/desktop.ini
