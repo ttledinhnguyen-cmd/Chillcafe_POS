@@ -2691,7 +2691,7 @@ function onSalaryInput(tr) {
 }
 function salaryBaseNet(sid) {
     const st = PR.state[sid];
-    let base = st.pay_type === 'month' ? st.rate : (st.pay_type === 'hour' ? st.rate * st.hours : st.rate * buoiCount(sid));
+    let base = st.pay_type === 'month' ? st.rate : (st.pay_type === 'hour' ? st.rate * st.hours * buoiCount(sid) : st.rate * buoiCount(sid));
     return { base, net: base + st.allowance - st.deduction };
 }
 function updateSalaryRowEl(tr) {
