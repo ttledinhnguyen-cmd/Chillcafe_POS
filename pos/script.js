@@ -2573,6 +2573,7 @@ async function loadPayroll() {
         document.querySelector('#timesheet-table tbody')?.addEventListener('click', (e) => { const c = e.target.closest('.ts-cell'); if (c) toggleTsCell(c); });
         document.querySelector('#payroll-table tbody')?.addEventListener('input', (e) => onSalaryInput(e.target.closest('tr')));
         document.querySelector('#payroll-table tbody')?.addEventListener('change', (e) => onSalaryInput(e.target.closest('tr')));
+        document.getElementById('ts-lock-btn')?.addEventListener('click', () => { PR.tsLocked = !PR.tsLocked; applyTsLockUI(); });
     }
     try {
         const [staff, sheet] = await Promise.all([api.get('/api/staff'), api.get('/api/payroll/' + period)]);
@@ -2607,7 +2608,9 @@ async function loadPayroll() {
                 st[dt.getHours() < 12 ? 'm' : 'a'].add(dt.getDate());
             });
         } catch (e) { /* không lấy được ca thì bỏ qua, vẫn hiện bảng thủ công */ }
+        if (PR.tsLocked === undefined) PR.tsLocked = true; // mặc định khóa
         renderTimesheet();
+        applyTsLockUI();
         renderSalary();
     } catch (e) { toast(e.message, 'error'); }
 }
@@ -2644,7 +2647,21 @@ function renderTimesheet() {
     }).join('');
 }
 
+// Khóa/mở khóa bảng chấm công (mặc định khóa)
+function applyTsLockUI() {
+    const locked = !!PR.tsLocked;
+    const b = document.getElementById('ts-lock-btn');
+    if (b) {
+        b.innerHTML = locked ? (LOCK_CLOSED_SVG + ' Mở khóa để sửa') : (LOCK_OPEN_SVG + ' Khóa lại');
+        b.classList.toggle('btn-primary', !locked);
+        b.title = locked ? 'Bảng đang khóa — bấm để sửa' : 'Đang cho phép sửa — bấm để khóa';
+    }
+    const tbl = document.getElementById('timesheet-table');
+    if (tbl) tbl.classList.toggle('ts-locked', locked);
+}
+
 function toggleTsCell(cell) {
+    if (PR.tsLocked) return; // bảng đang khóa
     const sid = cell.dataset.sid, sess = cell.dataset.sess, d = Number(cell.dataset.day);
     const set = PR.state[sid][sess];
     const [y, mo] = PR.period.split('-').map(Number);

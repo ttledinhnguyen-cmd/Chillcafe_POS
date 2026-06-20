@@ -100,6 +100,11 @@ a { color: var(--primary); text-decoration: none; }
 .btn-primary:disabled { background: #aaa; border-color: #aaa; cursor: not-allowed; }
 .btn-danger { background: var(--danger); color: white; border-color: var(--danger); }
 .btn-danger:hover { background: #c0392b; }
+/* Nút khóa/mở khóa (Quản lý bàn, Chấm công): to, chữ to, đỏ khi đang khóa */
+.lock-toggle { font-size: 16px !important; font-weight: 700 !important; padding: 13px 20px !important; }
+.lock-toggle:not(.btn-primary) { background: var(--danger) !important; color: #fff !important; border-color: var(--danger) !important; }
+.lock-toggle:not(.btn-primary):hover { background: #c0392b !important; }
+.lock-toggle .ico { width: 18px; height: 18px; }
 .btn-success { background: var(--success); color: white; border-color: var(--success); }
 .btn-success:hover { background: #219a52; }
 .btn-warning { background: var(--warning); color: white; border-color: var(--warning); }
@@ -753,3 +758,4 @@ input:focus, select:focus, textarea:focus{ border-color:#2a6f82 !important; box-
 /* Gridline cho bảng chấm công (dễ nhìn như Excel) */
 #timesheet-table { border-collapse: separate; border-spacing: 0; }
 #timesheet-table th, #timesheet-table td { border: 1px solid #dfe4e6; }
+#timesheet-table.ts-locked .ts-cell { cursor: default !important; }

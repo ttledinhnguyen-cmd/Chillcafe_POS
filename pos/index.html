@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Chill POS">
     <link rel="apple-touch-icon" href="/picture/pwa/apple-touch-icon.png">
-    <link rel="stylesheet" href="/pos/style.css?v=69">
+    <link rel="stylesheet" href="/pos/style.css?v=70">
     <!-- Layout guarantee inline (served no-cache) so a stale CDN-cached style.css can't break full-width tables/grids on desktop -->
     <style id="layout-guarantee">
     @media (min-width: 769px) {
@@ -207,7 +207,7 @@
                 <div class="page-header">
                     <h3>Quản lý bàn</h3>
                     <div style="display:flex;gap:8px;flex-wrap:wrap">
-                        <button class="btn" id="manage-floors-btn" data-perm="table.manage">Quản lý khu vực</button>
+                        <button class="btn lock-toggle" id="manage-floors-btn" data-perm="table.manage">Quản lý khu vực</button>
                         <button class="btn" id="add-floor-btn" data-perm="table.manage">+ Thêm khu vực</button>
                         <button class="btn btn-primary" id="add-table-btn">+ Thêm bàn</button>
                     </div>
@@ -328,7 +328,10 @@
                     </div>
                 </div>
                 <div class="card">
-                    <h3 style="margin:0 0 6px">Chấm công</h3>
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 6px">
+                        <h3 style="margin:0">Chấm công</h3>
+                        <button class="btn lock-toggle" id="ts-lock-btn" data-perm="payroll.edit">Mở khóa để sửa</button>
+                    </div>
                     <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px">Bấm vào ô để đánh dấu: dòng <b>Sáng</b> → "s" (tô xanh), dòng <b>Chiều</b> → "c" (tô vàng). Bấm lại để bỏ. Khi nhân viên mở ca, buổi đó tự được đánh dấu. Số buổi tự cộng sang bảng lương.</p>
                     <div style="overflow-x:auto">
                         <table class="data-table timesheet" id="timesheet-table">
@@ -706,6 +709,6 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-    <script src="/pos/script.js?v=75"></script>
+    <script src="/pos/script.js?v=76"></script>
 </body>
 </html>
