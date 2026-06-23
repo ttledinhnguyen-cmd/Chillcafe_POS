@@ -1018,6 +1018,7 @@ $('#pos-pay-btn').addEventListener('click', () => {
 
     show('#pay-cash-group');
     hide('#pay-transfer-group');
+    App._checkoutOrderId = null; App._checkoutOrderTotal = null; // bắt đầu thanh toán mới → tạo đơn mới
     openModal('modal-payment');
 });
 
@@ -1307,27 +1308,37 @@ $('#pre-print-btn')?.addEventListener('click', async () => {
 });
 
 $('#pay-confirm-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('pay-confirm-btn');
+    if (App._paying) return;                 // chống bấm nhiều lần
+    App._paying = true; if (btn) btn.disabled = true;
     try {
         const activeMethod = $('.pay-method.active')?.dataset.method || 'cash';
 
-        // 1. Create order
-        const orderData = {
-            items: App.cart.map(c => ({ id: c.id, qty: c.qty, note: c.note })),
-            type: App.selectedTable?.name === 'MANG VE' ? 'takeaway' : 'dine-in',
-            table_id: App.selectedTable?.id,
-            note: '',
-            discount_type: App.discount.type || undefined,
-            discount_value: App.discount.value || undefined,
-        };
-        const orderRes = await api.post('/api/orders', orderData);
+        // 1. Tạo đơn — nếu lần trước đã tạo rồi (thanh toán lỗi do mạng yếu) thì DÙNG LẠI, không tạo trùng
+        let orderId = App._checkoutOrderId;
+        let orderTotal = App._checkoutOrderTotal;
+        if (!orderId) {
+            const orderData = {
+                items: App.cart.map(c => ({ id: c.id, qty: c.qty, note: c.note })),
+                type: App.selectedTable?.name === 'MANG VE' ? 'takeaway' : 'dine-in',
+                table_id: App.selectedTable?.id,
+                note: '',
+                discount_type: App.discount.type || undefined,
+                discount_value: App.discount.value || undefined,
+            };
+            const orderRes = await api.post('/api/orders', orderData);
+            orderId = orderRes.id; orderTotal = orderRes.total;
+            App._checkoutOrderId = orderId; App._checkoutOrderTotal = orderTotal;
+        }
 
-        // 2. Pay
-        const payAmount = parseInt($('#pay-amount').value) || orderRes.total;
-        const payRes = await api.post(`/api/orders/${orderRes.id}/pay`, {
+        // 2. Thanh toán
+        const payAmount = parseInt($('#pay-amount').value) || orderTotal;
+        const payRes = await api.post(`/api/orders/${orderId}/pay`, {
             payment_method: activeMethod,
             payment_amount: payAmount
         });
 
+        App._checkoutOrderId = null; App._checkoutOrderTotal = null; // thành công → xóa cờ
         closeModal('modal-payment');
         toast(`Thanh toán thành công - ${payRes.invoice_number}`);
 
@@ -1347,7 +1358,11 @@ $('#pay-confirm-btn').addEventListener('click', async () => {
         loadPOS();
 
     } catch (err) {
-        toast(err.message, 'error');
+        // Nếu đã tạo đơn nhưng thanh toán lỗi → giữ cờ để lần bấm sau thanh toán lại ĐÚNG đơn đó (không tạo mới)
+        if (App._checkoutOrderId) toast('Đã tạo đơn nhưng thanh toán lỗi (mạng yếu). Bấm "Xác nhận" lại để thanh toán, KHÔNG tạo đơn mới.', 'error');
+        else toast(err.message, 'error');
+    } finally {
+        App._paying = false; if (btn) btn.disabled = false;
     }
 });
 
