@@ -238,6 +238,8 @@ addColumnSafe('orders', 'shift_id', 'INTEGER');
 addColumnSafe('orders', 'staff_name', 'TEXT');
 addColumnSafe('orders', 'invoice_number', 'TEXT');
 addColumnSafe('orders', 'paid_at', 'TEXT');
+addColumnSafe('orders', 'idempotency_key', 'TEXT');
+try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_idemp ON orders(idempotency_key) WHERE idempotency_key IS NOT NULL'); } catch (e) { console.warn('idemp index:', e.message); }
 addColumnSafe('admin_users', 'display_name', 'TEXT');
 addColumnSafe('admin_users', 'role', "TEXT DEFAULT 'admin'");
 addColumnSafe('admin_users', 'google_email', 'TEXT');
@@ -1396,6 +1398,103 @@ app.post('/api/orders', requireAuth, (req, res) => {
     broadcastSSE({ type: 'order_created', orderId, tableId: table_id, tableName, total, by: req.session.displayName });
     sendPushAll('notify_new_order', { title: 'Đơn hàng mới', body: (tableName ? tableName + ' • ' : '') + (Number(total) || 0).toLocaleString('vi-VN') + 'đ', url: '/pos/' });
     res.json({ success: true, id: orderId, total, subtotal, discountAmount });
+});
+
+function buildCheckoutResult(order) {
+    const settingsRows = db.prepare('SELECT * FROM settings').all();
+    const settings = Object.fromEntries(settingsRows.map(r => [r.key, r.value]));
+    return {
+        success: true,
+        id: order.id,
+        invoice_number: order.invoice_number,
+        change: order.change_amount || 0,
+        receipt: {
+            shopName: settings.name || 'HAKI COFFEE',
+            address: settings.address || '',
+            phone: settings.phone || '',
+            invoiceNumber: order.invoice_number,
+            date: order.paid_at || order.created_at,
+            tableName: order.table_name || '',
+            staffName: order.staff_name || '',
+            items: JSON.parse(order.items || '[]'),
+            subtotal: order.subtotal || order.total,
+            discountAmount: order.discount_amount || 0,
+            total: order.total,
+            paymentMethod: order.payment_method,
+            paidAmount: order.payment_amount || order.total,
+            change: order.change_amount || 0
+        }
+    };
+}
+
+// Thanh toán NGUYÊN TỬ: tạo đơn + thanh toán trong 1 request, có idempotency_key chống trùng tuyệt đối
+app.post('/api/orders/checkout', requireAuth, (req, res) => {
+    const { items, type, note, table_id, discount_type, discount_value, payment_method, payment_amount, idempotency_key } = req.body;
+
+    // Đã xử lý key này rồi → trả lại kết quả cũ (không tạo trùng dù client gửi lại)
+    if (idempotency_key) {
+        const existing = db.prepare('SELECT * FROM orders WHERE idempotency_key = ?').get(idempotency_key);
+        if (existing) return res.json(buildCheckoutResult(existing));
+    }
+
+    if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Đơn hàng phải có ít nhất 1 món' });
+    if (!['dine-in', 'takeaway'].includes(type)) return res.status(400).json({ error: 'Hình thức không hợp lệ' });
+    const method = ['cash', 'transfer', 'card', 'qr'].includes(payment_method) ? payment_method : 'cash';
+
+    const menuMap = Object.fromEntries(db.prepare('SELECT * FROM menu').all().map(m => [m.id, m]));
+    const validatedItems = []; let subtotal = 0;
+    for (const item of items) {
+        const mi = menuMap[item.id];
+        if (!mi) return res.status(400).json({ error: `Món ${item.id} không tồn tại` });
+        if (!validateNumber(item.qty, 1, 100)) return res.status(400).json({ error: 'Số lượng không hợp lệ' });
+        const qty = parseInt(item.qty);
+        validatedItems.push({ id: mi.id, name: mi.name, price: mi.price, qty, note: item.note || '' });
+        subtotal += mi.price * qty;
+    }
+    let discountAmount = 0;
+    if (discount_type === 'percent' && validateNumber(discount_value, 0, 100)) discountAmount = Math.round(subtotal * discount_value / 100);
+    else if (discount_type === 'fixed' && validateNumber(discount_value, 0, subtotal)) discountAmount = parseInt(discount_value);
+    const total = subtotal - discountAmount;
+
+    let tableName = '';
+    if (table_id) { const t = db.prepare('SELECT name FROM tables WHERE id = ?').get(table_id); if (t) tableName = t.name; }
+    const currentShift = db.prepare("SELECT id, staff_name FROM shifts WHERE status = 'open' ORDER BY open_time DESC LIMIT 1").get();
+
+    const orderId = uuidv4().slice(0, 8);
+    const nowIso = new Date().toISOString();
+    const date = nowIso.split('T')[0];
+    const paidAmount = parseInt(payment_amount) || total;
+    const changeAmount = Math.max(0, paidAmount - total);
+    let invoiceNumber, order;
+    try {
+        db.transaction(() => {
+            invoiceNumber = getNextInvoiceNumber();
+            db.prepare(`INSERT INTO orders (id, items, total, subtotal, discount_amount, discount_type, discount_value,
+                type, table_id, table_name, note, status, shift_id, staff_name, date, created_at,
+                payment_method, payment_amount, change_amount, invoice_number, code, paid_at, idempotency_key)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+                .run(orderId, JSON.stringify(validatedItems), total, subtotal, discountAmount,
+                    discount_type || null, discount_value || 0,
+                    type, table_id || null, tableName, sanitize(note || ''),
+                    currentShift?.id || null, currentShift?.staff_name || req.session.displayName || '',
+                    date, nowIso,
+                    method, paidAmount, changeAmount, invoiceNumber, invoiceNumber, nowIso, idempotency_key || null);
+            if (table_id) db.prepare('UPDATE tables SET status = ?, current_order_id = NULL WHERE id = ?').run('available', table_id);
+            db.prepare(`INSERT INTO transactions (code, type, category, amount, payment_method, description, shift_id, staff_name, date)
+                VALUES (?, 'income', 'sales', ?, ?, ?, ?, ?, ?)`)
+                .run(invoiceNumber, total, method, `Thanh toán ${invoiceNumber}`, currentShift?.id || null, currentShift?.staff_name || '', date);
+        })();
+        order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    } catch (e) {
+        if (idempotency_key) { const ex = db.prepare('SELECT * FROM orders WHERE idempotency_key = ?').get(idempotency_key); if (ex) return res.json(buildCheckoutResult(ex)); }
+        console.error('Checkout error:', e.message);
+        return res.status(500).json({ error: 'Lỗi server' });
+    }
+
+    auditLog(req.session.userId, 'ORDER_CHECKOUT', `#${orderId} - ${invoiceNumber} - ${total}đ (${method})`, req.ip);
+    broadcastSSE({ type: 'order_paid', orderId, tableId: table_id, invoiceNumber, total, by: req.session.displayName });
+    sendPushAll('notify_new_order', { title: 'Đã thanh toán ' + invoiceNumber, body: (Number(total) || 0).toLocaleString('vi-VN') + 'đ' + (req.session.displayName ? ' • ' + req.session.displayName : ''), url: '/pos/' });
+    res.json(buildCheckoutResult(order));
 });
 
 app.put('/api/orders/:id/items', requireAuth, (req, res) => {
